@@ -9,7 +9,11 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     strategy:
+      fail-fast: false # If one fails (e.g. api), don't cancel the other (dashboard)
       matrix:
         include:
           - context: .
@@ -22,6 +26,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # Generates tags automatically:
+      # 1. pushed to main -> :latest
+      # 2. released v1.0.0 -> :1.0.0 AND :latest (if default branch)
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -41,6 +57,10 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: true
-          tags: ${{ matrix.image }}:latest
-          # Adds multi-platform support (Key for cheap VPSs!)
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
+          # ⬇️ CACHING CONFIGURATION ⬇️
+          # Scoped by image name so API cache doesn't overwrite Dashboard cache
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
