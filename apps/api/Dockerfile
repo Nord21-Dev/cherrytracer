@@ -32,4 +32,4 @@ WORKDIR /app
 COPY --from=builder /app .
 
 # We run from the root context because the folder structure is preserved
-CMD ["bun", "run", "apps/api/src/index.ts"]
+CMD ["bun", "run", "--cwd", "apps/api", "start"]

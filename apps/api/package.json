@@ -2,6 +2,7 @@
     "name": "api",
     "version": "1.0.0",
     "scripts": {
+        "start": "drizzle-kit push && bun run src/index.ts",
         "dev": "bun run --watch src/index.ts",
         "db:generate": "drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
