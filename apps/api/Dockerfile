@@ -5,7 +5,7 @@ WORKDIR /app
 COPY apps/api/package.json ./
 
 # 2. Copy the ROOT lockfile (since context is root)
-COPY bun.lockb ./
+COPY bun.lock ./
 
 # 3. Install
 RUN bun install --frozen-lockfile --production

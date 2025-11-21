@@ -5,7 +5,7 @@ WORKDIR /app
 COPY apps/dashboard/package.json ./
 
 # 2. Copy ROOT lockfile
-COPY bun.lockb ./
+COPY bun.lock ./
 
 RUN bun install --frozen-lockfile
 COPY apps/dashboard/ .
