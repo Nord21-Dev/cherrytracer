@@ -1,135 +1,149 @@
-# Turborepo starter
+# 🍒 Cherrytracer
 
-This Turborepo starter is maintained by the Turborepo core team.
+**The open-source observability platform for indie hackers who hate configuring Grafana.**
 
-## Using this example
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Built with Bun](https://img.shields.io/badge/Built%20with-Bun-black)](https://bun.sh)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue)](https://www.docker.com/)
 
-Run the following command:
+Cherrytracer is a lightweight, self-hosted alternative to Datadog and Loki. It is designed for **speed**, **simplicity**, and **sanity**.
 
-```sh
-npx create-turbo@latest
+If you have less than 5 million users and just want to know *"Why is my API 500-ing?"* without learning PromQL, this is for you.
+
+![Dashboard Preview](https://raw.githubusercontent.com/placeholder/dashboard-screenshot.png)
+
+---
+
+## ⚡️ Why Cherrytracer?
+
+Current observability tools are either **too expensive** (Datadog, New Relic) or **too complex** (Prometheus, Grafana, Loki).
+
+Cherrytracer is different:
+*   **Zero-Config:** No complex query languages. SQL-driven metrics out of the box.
+*   **Tiny Footprint:** The backend runs on Bun + Elysia. The frontend is Nuxt 4. It runs comfortably on a $5 VPS.
+*   **Disk Safety:** Built-in "Safety Valve" auto-prunes logs if your disk fills up. It will never crash your server.
+*   **Beautiful UI:** A Vercel-like dashboard that feels like a modern SaaS, not a spaceship control panel.
+
+---
+
+## 🚀 Quick Start (Self-Hosted)
+
+You can spin this up in 60 seconds using Docker Compose.
+
+### 1. Docker Compose
+Create a `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  cherrytracer:
+    image: cherrytracer/all-in-one:latest
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://user:pass@db:5432/cherry
+      - JWT_SECRET=replace_with_a_long_secret
+      - ADMIN_EMAIL=admin@example.com
+      - ADMIN_PASSWORD=secure_password
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    volumes:
+      - cherry_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=cherry
+
+volumes:
+  cherry_data:
 ```
 
-## What's inside?
-
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+Run it:
+```bash
+docker-compose up -d
 ```
 
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+Visit **`http://localhost:3000`**. Log in with the email/password you set in the ENV.
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
+### 2. Deploy via Coolify / Railway
+Cherrytracer is built to be "One-Click" compatible.
+*   **Coolify:** Select "Docker Compose" and paste the config above.
+*   **Railway:** Deploy from Repo. It automatically detects the Dockerfile.
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+---
 
-### Develop
+## 📦 The Client SDK
 
-To develop all apps and packages, run the following command:
+Our universal SDK works in **Node.js**, **Bun**, and the **Browser**. It is <2KB and uses "Smart Batching" to ensure it never slows down your app.
 
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
+```bash
+npm install cherrytracer-client
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+### Usage
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
+```typescript
+import { CherryTracer } from "cherrytracer-client";
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
+const logger = new CherryTracer({
+  apiKey: "ct_12345...", // Get this from your Dashboard
+  baseUrl: "https://your-cherrytracer-instance.com"
+});
 
-### Remote Caching
+// 1. Standard Logging
+logger.info("User signed up", { plan: "pro", userId: 123 });
+logger.error("Payment failed", { error: err.message });
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+// 2. Tracing (Performance Monitoring)
+const span = logger.startSpan("checkout_process");
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
+try {
+  await processPayment();
+  span.end({ success: true }); // Automatically records duration
+} catch (e) {
+  span.error("Card declined");
+  span.end({ success: false });
+}
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+---
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+## 🛠 Architecture
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
+We hate bloat. Here is the entire stack:
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
+*   **Backend:** [ElysiaJS](https://elysiajs.com) (running on Bun) for high-throughput ingestion.
+*   **Database:** PostgreSQL + [Drizzle ORM](https://orm.drizzle.team). No specialized time-series DB required.
+*   **Frontend:** [Nuxt 4](https://nuxt.com) + Nuxt UI.
+*   **Realtime:** WebSockets for live log streaming.
 
-## Useful Links
+### The "Safety Valve" 🛡️
+The #1 fear of self-hosting logs is running out of disk space.
+Cherrytracer includes a background worker that checks your Postgres size every hour. If it exceeds your configured limit (e.g., 5GB), it automatically deletes the oldest 10% of logs. **Your server stays alive, always.**
 
-Learn more about the power of Turborepo:
+---
 
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+## 🤝 Contributing
+
+We welcome PRs from the community!
+
+1.  Clone the repo: `git clone https://github.com/yourusername/cherrytracer.git`
+2.  Install dependencies: `bun install`
+3.  Start local dev: `bun dev` (Starts DB, API, and UI)
+
+---
+
+## 📜 License
+
+MIT © Sebastian Klein
+
+<div align="center">
+  <p>
+    <sub>Built with ❤️ for the Indie Web.</sub>
+  </p>
+</div>

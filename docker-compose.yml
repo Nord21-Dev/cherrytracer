@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cherry_db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: cherry_user
+      POSTGRES_PASSWORD: cherry_password
+      POSTGRES_DB: cherry_local
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

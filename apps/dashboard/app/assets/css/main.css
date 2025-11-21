@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: Domine, sans-serif;
+}
+
+@theme {
+  --font-serif: Domine, sans-serif; 
+}

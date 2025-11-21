@@ -1,5 +1,5 @@
 {
-  "name": "cherrytrace",
+  "name": "cherrytracer",
   "private": true,
   "scripts": {
     "build": "turbo run build",
