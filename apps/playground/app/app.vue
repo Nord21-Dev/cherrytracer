@@ -90,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { CherryTracer } from 'cherrytracer-client'
+import { CherryTracer } from 'cherrytracer'
 import { Simulator } from './utils/simulator'
 
 const API_BASE = 'http://localhost:3000'

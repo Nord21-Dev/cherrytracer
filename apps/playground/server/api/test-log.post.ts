@@ -1,4 +1,4 @@
-import { CherryTracer } from 'cherrytracer-client'
+import { CherryTracer } from 'cherrytracer'
 
 // We instantiate outside the handler to simulate a singleton in a real app
 // In a real app, this would be in a plugin
