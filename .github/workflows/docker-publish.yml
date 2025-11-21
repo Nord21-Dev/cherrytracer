@@ -14,10 +14,10 @@ jobs:
         include:
           - context: .
             dockerfile: apps/api/Dockerfile
-            image: cherrytracer/api
+            image: nord21dev/cherrytracer-api
           - context: .
             dockerfile: apps/dashboard/Dockerfile
-            image: cherrytracer/dashboard
+            image: nord21dev/cherrytracer-dashboard
 
     steps:
       - name: Checkout code

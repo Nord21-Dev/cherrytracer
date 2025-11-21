@@ -37,26 +37,43 @@ Create a `docker-compose.yml`:
 version: '3.8'
 
 services:
-  cherrytracer:
-    image: cherrytracer/all-in-one:latest
+  # 1. The Ingestion API (Port 3000)
+  api:
+    image: nord21dev/cherrytracer-api:latest
     restart: always
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgres://user:pass@db:5432/cherry
-      - JWT_SECRET=replace_with_a_long_secret
+      - DATABASE_URL=postgres://cherry:cherry@db:5432/cherry
+      - JWT_SECRET=replace_with_super_secret_key
       - ADMIN_EMAIL=admin@example.com
       - ADMIN_PASSWORD=secure_password
     depends_on:
       - db
 
+  # 2. The Dashboard (Port 3001)
+  dashboard:
+    image: nord21dev/cherrytracer-dashboard:latest
+    restart: always
+    ports:
+      - "3001:3000"
+    environment:
+      # Server-side connection to API (Docker Network)
+      - NUXT_API_URL=http://api:3000
+      # Client-side connection to API (Browser Access)
+      # Change 'localhost' to your domain/IP in production
+      - NUXT_PUBLIC_API_BASE_URL=http://localhost:3000
+    depends_on:
+      - api
+
+  # 3. The Database
   db:
     image: postgres:16-alpine
     volumes:
       - cherry_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
+      - POSTGRES_USER=cherry
+      - POSTGRES_PASSWORD=cherry
       - POSTGRES_DB=cherry
 
 volumes:
@@ -68,7 +85,8 @@ Run it:
 docker-compose up -d
 ```
 
-Visit **`http://localhost:3000`**. Log in with the email/password you set in the ENV.
+*   **Dashboard:** Visit **`http://localhost:3001`**. Log in with the credentials set in ENV.
+*   **API Endpoint:** `http://localhost:3000` (Use this in your SDK).
 
 ### 2. Deploy via Coolify / Railway
 Cherrytracer is built to be "One-Click" compatible.
@@ -82,17 +100,17 @@ Cherrytracer is built to be "One-Click" compatible.
 Our universal SDK works in **Node.js**, **Bun**, and the **Browser**. It is <2KB and uses "Smart Batching" to ensure it never slows down your app.
 
 ```bash
-npm install cherrytracer-client
+npm install cherrytracer
 ```
 
 ### Usage
 
 ```typescript
-import { CherryTracer } from "cherrytracer-client";
+import { CherryTracer } from "cherrytracer";
 
 const logger = new CherryTracer({
-  apiKey: "ct_12345...", // Get this from your Dashboard
-  baseUrl: "https://your-cherrytracer-instance.com"
+  apiKey: "ct_12345...", // Get this from your Dashboard (Settings)
+  baseUrl: "http://localhost:3000" // Your API URL
 });
 
 // 1. Standard Logging
