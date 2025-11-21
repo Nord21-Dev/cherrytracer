@@ -1,19 +1,37 @@
-FROM oven/bun:1 AS builder
+# 1. Base setup
+FROM oven/bun:1 AS base
 WORKDIR /app
 
-# 1. Copy dashboard package.json
-COPY apps/dashboard/package.json ./
+# 2. Prune Stage
+FROM base AS prune
+WORKDIR /app
+COPY . .
+RUN bun add -g turbo
+RUN turbo prune dashboard --docker
 
-# 2. Copy ROOT lockfile
-COPY bun.lock ./
+# 3. Build Stage
+FROM base AS builder
+WORKDIR /app
 
-RUN bun install --frozen-lockfile
-COPY apps/dashboard/ .
+# Copy json files
+COPY --from=prune /app/out/json/ .
+COPY --from=prune /app/out/bun.lock ./bun.lock
+
+# Install deps
+RUN bun install
+
+# Copy source and build
+COPY --from=prune /app/out/full/ .
 RUN bun run build
 
+# 4. Runner Stage
 FROM oven/bun:1
 WORKDIR /app
-COPY --from=builder /app/.output ./.output
+
+# Copy the built output from Nuxt
+COPY --from=builder /app/apps/dashboard/.output ./.output
+
 ENV PORT=3000
 ENV HOST=0.0.0.0
+
 CMD ["bun", ".output/server/index.mjs"]
