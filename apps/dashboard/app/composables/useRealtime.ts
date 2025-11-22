@@ -13,10 +13,11 @@ export const useRealtime = () => {
     const getWsUrl = () => {
         if (import.meta.server) return ''
 
-        if (config.public.apiBase) {
-             const url = new URL(config.public.apiBase)
-             const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-             return `${protocol}//${url.host}/ws`
+        const publicApiBase = config.public.apiBase
+        if (publicApiBase && /^https?:\/\//i.test(publicApiBase)) {
+            const url = new URL(publicApiBase)
+            const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+            return `${protocol}//${url.host}/ws`
         }
         
         if (window.location.hostname === 'localhost' && window.location.port === '3001') {

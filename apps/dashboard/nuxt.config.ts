@@ -4,7 +4,7 @@ const normalizeBaseUrl = (url?: string) => {
 }
 
 const API_BASE_URL = normalizeBaseUrl(process.env.NUXT_API_URL) || 'http://localhost:3000'
-const PUBLIC_API_BASE_URL = process.env.NUXT_PUBLIC_API_BASE_URL || ''
+const PUBLIC_API_BASE_URL = normalizeBaseUrl(process.env.NUXT_PUBLIC_API_BASE_URL) || '/api'
 
 export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',

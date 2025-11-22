@@ -58,11 +58,9 @@ services:
     ports:
       - "3001:3000"
     environment:
-      # Server-side connection to API (Docker Network)
       - NUXT_API_URL=http://api:3000
-      # Client-side connection to API (Browser Access)
-      # Change 'localhost' to your domain/IP in production
-      - NUXT_PUBLIC_API_BASE_URL=http://localhost:3000
+      # Optional: uncomment only when the browser must call a different origin
+      # - NUXT_PUBLIC_API_BASE_URL=https://your-api-host
     depends_on:
       - api
 

@@ -1,4 +1,4 @@
-import { CherryTracer } from "cherrytracer-client"; // Assuming workspace link
+import { CherryTracer } from "cherrytracer"; // Assuming workspace link
 
 const PRODUCTS = ["Premium Plan", "Credits Pack", "Enterprise Seat"];
 const ERRORS = ["Card Declined", "Gateway Timeout", "Insufficient Funds"];

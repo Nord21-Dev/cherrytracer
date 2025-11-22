@@ -1,0 +1,55 @@
+version: '3.8'
+x-config:
+  ADMIN_EMAIL: admin@example.com
+  ADMIN_PASSWORD: changeme123
+  DOMAIN: 'https://cherrytracer.printercow.com'
+services:
+  proxy:
+    image: 'nginx:alpine'
+    restart: always
+    depends_on:
+      - api
+      - dashboard
+    command: "/bin/sh -c \"echo ' events { worker_connections 1024; }  http { \n  server { \n    listen 80; \n    client_max_body_size 10M;\n\n    # --- API Routes ---\n    location /api/ { \n      proxy_pass http://api:3000; \n      proxy_set_header Host \\$$host;\n      proxy_set_header X-Real-IP \\$$remote_addr;\n      proxy_set_header X-Forwarded-For \\$$proxy_add_x_forwarded_for;\n    } \n\n    location /ingest { \n      proxy_pass http://api:3000; \n      proxy_set_header Host \\$$host;\n      proxy_set_header X-Real-IP \\$$remote_addr;\n    } \n\n    # --- OpenAPI Fix ---\n    # 1. Handle the double-path bug seen in your logs\n    location = /openapi/openapi/json {\n      rewrite ^/openapi/openapi/json$ /openapi/json break;\n      proxy_pass http://api:3000;\n      proxy_set_header Host \\$$host;\n    }\n\n    # 2. Handle standard OpenAPI requests\n    location /openapi { \n      proxy_pass http://api:3000; \n      proxy_set_header Host \\$$host;\n    } \n\n    # --- Websockets ---\n    location /ws { \n      proxy_pass http://api:3000; \n      proxy_http_version 1.1; \n      proxy_set_header Upgrade \\$$http_upgrade; \n      proxy_set_header Connection \\\"Upgrade\\\"; \n      proxy_set_header Host \\$$host; \n    } \n\n    # --- Dashboard (Frontend) ---\n    location / { \n      proxy_pass http://dashboard:3000; \n      proxy_set_header Host \\$$host;\n      proxy_set_header X-Real-IP \\$$remote_addr;\n      proxy_set_header X-Forwarded-For \\$$proxy_add_x_forwarded_for;\n    } \n  } \n}' > /etc/nginx/nginx.conf && nginx -g 'daemon off;'\"\n"
+  api:
+    image: 'nord21dev/cherrytracer-api:latest'
+    restart: always
+    command: '/bin/sh -c "cd apps/api && bun run db:push && bun run src/index.ts"'
+    environment:
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: changeme123
+      DOMAIN: 'https://cherrytracer.printercow.com'
+      DATABASE_URL: 'postgres://cherry:cherry@db:5432/cherry'
+      JWT_SECRET: auto_generated_internal_secret_key_change_if_you_want
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
+  dashboard:
+    image: 'nord21dev/cherrytracer-dashboard:latest'
+    restart: always
+    environment:
+      NUXT_API_URL: 'http://api:3000'
+  # Uncomment if the dashboard cannot reach the API via the built-in /api proxy
+  # NUXT_PUBLIC_API_BASE_URL: '${DOMAIN:-https://cherrytracer.printercow.com}'
+    depends_on:
+      - api
+  db:
+    image: 'postgres:16-alpine'
+    restart: always
+    volumes:
+      - 'cherry_data:/var/lib/postgresql/data'
+    environment:
+      POSTGRES_USER: cherry
+      POSTGRES_PASSWORD: cherry
+      POSTGRES_DB: cherry
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U cherry -d cherry'
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  cherry_data: null
+
