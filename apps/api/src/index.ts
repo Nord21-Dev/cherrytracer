@@ -37,6 +37,7 @@ const app = new Elysia()
         }
     }))
     .get("/", () => ({ status: "Cherrytracer API Online 🍒" }))
+    .get("/api", () => ({ status: "Cherrytracer /API Online 🍒" }))
     .use(ingestRoutes)
     .group("/api", (app) =>
         app
