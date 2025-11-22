@@ -1,10 +1,5 @@
-const normalizeBaseUrl = (url?: string) => {
-    if (!url) return undefined
-    return url.endsWith('/') ? url.slice(0, -1) : url
-}
-
-const API_BASE_URL = normalizeBaseUrl(process.env.NUXT_API_URL) || 'http://localhost:3000'
-const PUBLIC_API_BASE_URL = normalizeBaseUrl(process.env.NUXT_PUBLIC_API_BASE_URL) || '/api'
+// nuxt.config.ts
+const isProd = process.env.NODE_ENV === 'production'
 
 export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
@@ -12,14 +7,21 @@ export default defineNuxtConfig({
     modules: ['@nuxt/eslint', '@nuxt/ui', '@vueuse/nuxt', '@nuxt/icon'],
     css: ['~/assets/css/main.css'],
 
+    // Dev only – in Docker you use nginx
     devServer: {
         port: 3001
     },
 
+    // Correct runtimeConfig: server vs client
     runtimeConfig: {
-        apiBase: API_BASE_URL,
+        // Used on the server (SSR, server routes)
+        // In Docker, call the API container directly
+        apiBase: isProd ? 'http://api:3000' : 'http://localhost:3000',
+
         public: {
-            apiBase: PUBLIC_API_BASE_URL
+            // Used in the browser
+            // In Docker, hit nginx at /api (which proxies to api:3000)
+            apiBase: isProd ? '/api' : 'http://localhost:3000/api'
         }
     },
 
@@ -36,13 +38,14 @@ export default defineNuxtConfig({
     },
 
     nitro: {
-        // REMOVED: devProxy block (It causes the crash)
-        
-        routeRules: {
-            '/api/**': { 
-                proxy: `${API_BASE_URL}/api/**`
-            },
-        }
+        // Only proxy /api in local dev – NOT in production
+        routeRules: isProd
+            ? {}
+            : {
+                '/api/**': {
+                    proxy: 'http://localhost:3000/api/**'
+                }
+            }
     },
 
     vite: {
