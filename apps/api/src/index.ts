@@ -120,7 +120,11 @@ if (adminEmail && adminPass) {
     }
 }
 
-app.listen(3000);
+const port = 3000;
+app.listen({
+    port: port,
+    hostname: '0.0.0.0'
+});
 
 console.log(`🦊 Cherrytracer API running at ${app.server?.hostname}:${app.server?.port}`);
 console.log(`📚 Docs available at http://localhost:3000/openapi`);
