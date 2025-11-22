@@ -29,6 +29,10 @@ services:
     image: 'nord21dev/cherrytracer-dashboard:latest'
     restart: always
     environment:
+      NITRO_HOST: '0.0.0.0'
+      NITRO_PORT: '3000'
+      PORT: '3000'
+      HOST: '0.0.0.0'
       NUXT_API_URL: 'http://api:3000'
   # Uncomment if the dashboard cannot reach the API via the built-in /api proxy
   # NUXT_PUBLIC_API_BASE_URL: '${DOMAIN:-https://cherrytracer.printercow.com}'
