@@ -16,6 +16,7 @@ Cherrytracer now uses trunk-based development with Changesets to automate npm pu
     - `apps/api` → `nord21dev/cherrytracer-api:{latest, <api version>}`
     - `apps/dashboard` → `nord21dev/cherrytracer-dashboard:{latest, <dashboard version>}`
     - uses multi-arch builds and needs `DOCKER_USERNAME`/`DOCKER_PASSWORD`.
+  - Creates git tags per released package: `cherrytracer-vX.Y.Z`, `api-vX.Y.Z`, `dashboard-vX.Y.Z`.
 
 ## Notes
 - Use `workflow_dispatch` to retrigger the release pipeline if a publish step needs to be rerun.
