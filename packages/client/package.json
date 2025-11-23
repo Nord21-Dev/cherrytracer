@@ -1,6 +1,6 @@
 {
   "name": "cherrytracer",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Universal, lightweight observability SDK for Cherrytracer",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
