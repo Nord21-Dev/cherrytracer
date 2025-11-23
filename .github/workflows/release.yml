@@ -54,13 +54,12 @@ jobs:
         id: releases
         run: bun scripts/check-releases.ts
 
-      - name: Create git tags for released packages
+      - name: Create GitHub Releases
         if: steps.releases.outputs.cherrytracer_changed == 'true' || steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
 
           declare -A tags
           if [ "${{ steps.releases.outputs.cherrytracer_changed }}" = "true" ]; then
@@ -75,12 +74,18 @@ jobs:
 
           for key in "${!tags[@]}"; do
             tag="${tags[$key]}"
-            if git rev-parse "$tag" >/dev/null 2>&1; then
-              echo "Tag $tag already exists; skipping"
+            
+            # Check if release already exists
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "Release $tag already exists; skipping"
               continue
             fi
-            git tag "$tag"
-            git push origin "$tag"
+
+            echo "Creating release for $tag"
+            gh release create "$tag" \
+              --title "$tag" \
+              --notes "Automated release for $tag. See CHANGELOG.md for details." \
+              --target main
           done
 
       - name: Set up QEMU
