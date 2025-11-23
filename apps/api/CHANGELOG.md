@@ -1,5 +1,11 @@
 # api
 
+## 0.0.7
+
+### Patch Changes
+
+- 3913d5f: switched to github releases
+
 ## 0.0.6
 
 ### Patch Changes
