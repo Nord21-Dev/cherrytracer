@@ -1,29 +1,39 @@
 export default defineNuxtRouteMiddleware(async (to) => {
-  const { user, fetchUser } = useAuth()
+    const { user, fetchUser } = useAuth()
+    const config = useRuntimeConfig()
 
-  if (!user.value) {
-    await fetchUser()
-  }
+    const publicRoutes = ['/login', '/setup']
 
-  const publicRoutes = ['/login', '/setup']
-  
-  if (user.value && publicRoutes.includes(to.path)) {
-    return navigateTo('/')
-  }
+    // 1. Public routes: no need to call the API if we're not logged in
+    if (publicRoutes.includes(to.path)) {
+        if (!user.value) {
+            // Allow /login and /setup for unauthenticated users
+            return
+        }
+        // Logged-in user should not see auth pages
+        return navigateTo('/')
+    }
 
-  if (!user.value) {
-    if (publicRoutes.includes(to.path)) return
+    // 2. For all other routes, make sure we have the user state
+    if (!user.value) {
+        await fetchUser()
+    }
 
-    // Check if system needs setup (claimed?)
+    if (user.value) {
+        return
+    }
+
+    // 3. Not logged in: check if instance is already claimed
     try {
-      const status = await $fetch<{ claimed: boolean }>('/api/auth/status')
-      if (!status.claimed) {
-        return navigateTo('/setup')
-      }
-    } catch (e) {
-      // API down or error?
+        const baseURL = import.meta.server ? config.apiBase : undefined
+        const status = await $fetch<{ claimed: boolean }>('/api/auth/status', { baseURL })
+
+        if (!status.claimed) {
+            return navigateTo('/setup')
+        }
+    } catch {
+        // API down or error – fall through to /login
     }
 
     return navigateTo('/login')
-  }
 })
