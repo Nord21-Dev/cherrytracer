@@ -10,7 +10,7 @@ Cherrytracer is a lightweight, self-hosted alternative to Datadog and Loki. It i
 
 If you have less than 5 million users and just want to know *"Why is my API 500-ing?"* without learning PromQL, this is for you.
 
-![Dashboard Preview](https://raw.githubusercontent.com/placeholder/dashboard-screenshot.png)
+![Dashboard Preview](screenshots/dashboard.png)
 
 ---
 
