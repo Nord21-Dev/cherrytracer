@@ -1,5 +1,11 @@
 # dashboard
 
+## 0.0.8
+
+### Patch Changes
+
+- b692a3f: fix for building docker images
+
 ## 0.0.7
 
 ### Patch Changes
