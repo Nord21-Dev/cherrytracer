@@ -1,5 +1,12 @@
 # api
 
+## 0.0.6
+
+### Patch Changes
+
+- 65a7195: auto version creation
+- 65a7195: Improved CI pipeline
+
 ## 0.0.5
 
 ### Patch Changes
