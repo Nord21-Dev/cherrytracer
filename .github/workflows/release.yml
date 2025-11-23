@@ -41,8 +41,8 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          version: bunx changeset version
-          publish: echo "Publishing handled in custom steps"
+          version: bun run version-packages
+          publish: bun run release
           commit: "chore: release"
           title: "chore: release"
         env:
@@ -50,54 +50,12 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Check if this is a release PR merge
-        id: release_pr
-        run: |
-          set -euo pipefail
-          msg=$(git log -1 --pretty=%B)
-          if echo "$msg" | grep -qi "chore: release"; then
-            echo "is_release=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_release=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Skip non-release merges
-        if: steps.release_pr.outputs.is_release == 'false' && github.event_name != 'workflow_dispatch'
-        run: echo "Not a release PR merge; exiting before publish/build."
-        shell: bash
-
-      - name: Determine released packages
+      - name: Check for release
         id: releases
-        if: steps.release_pr.outputs.is_release == 'true' || github.event_name == 'workflow_dispatch'
-        run: |
-          set -euo pipefail
-
-          declare -A paths=(["cherrytracer"]="packages/client" ["api"]="apps/api" ["dashboard"]="apps/dashboard")
-
-          for name in "${!paths[@]}"; do
-            pkg_path="${paths[$name]}"
-            pkg_file="${pkg_path}/package.json"
-
-            if [ ! -f "$pkg_file" ]; then
-              echo "${name}_changed=false" >> "$GITHUB_OUTPUT"
-              echo "${name}_version=" >> "$GITHUB_OUTPUT"
-              continue
-            fi
-
-            current_version=$(jq -r '.version // empty' "$pkg_file")
-            previous_version=$(git show HEAD~1:"$pkg_file" 2>/dev/null | jq -r '.version // empty' || echo "")
-
-            if [ -n "$current_version" ] && [ "$current_version" != "$previous_version" ]; then
-              echo "${name}_changed=true" >> "$GITHUB_OUTPUT"
-              echo "${name}_version=$current_version" >> "$GITHUB_OUTPUT"
-            else
-              echo "${name}_changed=false" >> "$GITHUB_OUTPUT"
-              echo "${name}_version=$current_version" >> "$GITHUB_OUTPUT"
-            fi
-          done
+        run: bun scripts/check-releases.ts
 
       - name: Create git tags for released packages
-        if: (steps.release_pr.outputs.is_release == 'true' || github.event_name == 'workflow_dispatch') && (steps.releases.outputs.cherrytracer_changed == 'true' || steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true')
+        if: steps.releases.outputs.cherrytracer_changed == 'true' || steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true'
         run: |
           set -euo pipefail
 
@@ -124,12 +82,6 @@ jobs:
             git tag "$tag"
             git push origin "$tag"
           done
-
-      - name: Publish cherrytracer to npm
-        if: (steps.release_pr.outputs.is_release == 'true' || github.event_name == 'workflow_dispatch') && steps.releases.outputs.cherrytracer_changed == 'true'
-        run: |
-          bun --cwd packages/client run build
-          bunx changeset publish
 
       - name: Set up QEMU
         if: (steps.release_pr.outputs.is_release == 'true' || github.event_name == 'workflow_dispatch') && (steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true')

@@ -1,22 +1,73 @@
-# Release process
+# Release Process for Newbies 🍒
 
-Cherrytracer now uses trunk-based development with Changesets to automate npm publishing and Docker pushes.
+Welcome to the Cherrytracer release process! We use a "trunk-based" development workflow with **Changesets** to automate versioning, changelogs, and publishing.
 
-## Day-to-day workflow
-- Create a feature branch from `main`.
-- When you touch `packages/client`, `apps/api`, or `apps/dashboard`, run `bunx changeset` once and write a short note describing the change (pick patch/minor/major).
-- Open a PR; merge to `main` after review.
+This guide will walk you through how to contribute changes and trigger releases without breaking a sweat.
 
-## What happens on `main`
-- `.github/workflows/release.yml` runs on every push to `main`.
-- If there are unpublished changesets, it opens/updates a `chore: release` PR.
-- When that PR is merged, the workflow:
-  - Publishes `cherrytracer` to npm **only if** the client SDK version changed (requires `NPM_TOKEN`).
-  - Builds/pushes Docker images **only for the apps whose versions changed**:
-    - `apps/api` → `nord21dev/cherrytracer-api:{latest, <api version>}`
-    - `apps/dashboard` → `nord21dev/cherrytracer-dashboard:{latest, <dashboard version>}`
-    - uses multi-arch builds and needs `DOCKER_USERNAME`/`DOCKER_PASSWORD`.
-  - Creates git tags per released package: `cherrytracer-vX.Y.Z`, `api-vX.Y.Z`, `dashboard-vX.Y.Z`.
+## 1. Making Changes
 
-## Notes
-- Use `workflow_dispatch` to retrigger the release pipeline if a publish step needs to be rerun.
+When you are working on a new feature or fix:
+
+1.  **Create a Branch**: Always start a new branch from `main`.
+    ```bash
+    git checkout -b my-awesome-feature
+    ```
+2.  **Write Code**: Make your changes to the codebase.
+3.  **Create a Changeset**: If your changes affect any of the following packages, you need to declare it:
+    *   `packages/client` (The NPM package)
+    *   `apps/api` (The Backend)
+    *   `apps/dashboard` (The Frontend)
+
+    Run the following command in the root directory:
+    ```bash
+    bun run changeset
+    ```
+    *   **Select Packages**: Use arrow keys and spacebar to select the packages you modified.
+    *   **Select SemVer Bump**: Choose `patch` (bug fix), `minor` (new feature), or `major` (breaking change).
+    *   **Write Summary**: Write a short, user-facing description of your change. This will end up in the CHANGELOG.
+
+    This command creates a markdown file in `.changeset/`. Commit this file along with your code.
+
+4.  **Push and PR**: Push your branch and open a Pull Request against `main`.
+
+## 2. The Release Lifecycle
+
+Once your PR is merged into `main`, the automation takes over.
+
+### Step A: The "Version Packages" PR
+The CI system monitors `main`. If it sees new changesets (those markdown files you added), it will automatically open (or update) a special Pull Request titled **"Version Packages"**.
+
+*   **What it does**: This PR calculates the new versions, updates `package.json` files, and writes to `CHANGELOG.md`.
+*   **Action**: When you are ready to release, simply **merge this PR**.
+
+### Step B: The Release Workflow
+As soon as the "Version Packages" PR is merged, the **Release** GitHub Action kicks in.
+
+It performs the following steps automatically:
+
+1.  **Checks for Changes**: It looks at which packages had their versions bumped.
+2.  **Publishes to NPM**: If `packages/client` changed, it publishes the new version to NPM.
+3.  **Builds Docker Images**:
+    *   If `apps/api` changed, it builds and pushes `nord21dev/cherrytracer-api`.
+    *   If `apps/dashboard` changed, it builds and pushes `nord21dev/cherrytracer-dashboard`.
+    *   Images are tagged with `latest` and the specific version (e.g., `v1.2.0`).
+4.  **Git Tags**: It creates git tags for the release (e.g., `api-v1.2.0`, `dashboard-v1.2.0`).
+
+## Troubleshooting
+
+### "I merged my PR but no release happened!"
+*   Did you add a changeset? If not, the system doesn't know a release is needed.
+*   Is the "Version Packages" PR open? You need to merge *that* PR to trigger the actual release.
+
+### "I need to re-run a failed release"
+*   Go to the "Actions" tab in GitHub.
+*   Select the "Release" workflow.
+*   Click "Run workflow" (select `main` branch). This will re-check versions and publish/build anything that is missing.
+
+## Key Commands
+
+| Command | Description |
+| :--- | :--- |
+| `bun run changeset` | Create a new changeset (do this before committing). |
+| `bun run version-packages` | (CI only) Consumes changesets and updates versions. |
+| `bun run release` | (CI only) Publishes to NPM and triggers Docker builds. |
