@@ -7,6 +7,7 @@ export interface CherryConfig {
   flushInterval?: number; // ms, default 2000
   batchSize?: number; // default 50
   enabled?: boolean; // default true
+  keyType?: "browser" | "server"; // Hint for runtime warnings (defaults to environment)
 }
 
 export interface LogEvent {

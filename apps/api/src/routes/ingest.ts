@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia";
-import { getProjectIdFromKey } from "../services/auth";
+import { getProjectKeyInfo } from "../services/auth";
 import { ingestQueue } from "../queue";
+import { checkReferrer } from "../services/referrer";
 
 type LogEventPayload = {
   level: string;
@@ -61,6 +62,7 @@ export const ingestRoutes = new Elysia({ prefix: "/ingest" })
   .post("/", async ({ body, headers, set }) => {
     const apiKey = coerceHeader(headers["x-api-key"]);
     const headerProjectId = coerceHeader(headers["x-project-id"]);
+    const refererHeader = coerceHeader(headers["referer"] || headers["referrer"]);
 
     if (!apiKey) {
       set.status = 401;
@@ -76,8 +78,15 @@ export const ingestRoutes = new Elysia({ prefix: "/ingest" })
     const claimedProjectId = headerProjectId || hintedProjectId;
 
     let projectId: string | null = null;
+    let keyType: "server" | "browser" | null = null;
+    let allowedReferrers: string[] = [];
     try {
-      projectId = await getProjectIdFromKey(apiKey);
+      const keyInfo = await getProjectKeyInfo(apiKey);
+      if (keyInfo) {
+        projectId = keyInfo.projectId;
+        keyType = keyInfo.type;
+        allowedReferrers = keyInfo.allowedReferrers || [];
+      }
     } catch (error) {
       console.error("[Ingest] Project lookup failed", error);
       set.status = 500;
@@ -87,6 +96,14 @@ export const ingestRoutes = new Elysia({ prefix: "/ingest" })
     if (!projectId) {
       set.status = 403;
       return { error: "Invalid API Key" };
+    }
+
+    if (keyType === "browser") {
+      const refCheck = checkReferrer(refererHeader, allowedReferrers);
+      if (!refCheck.allowed) {
+        set.status = 403;
+        return { error: refCheck.reason || "Referrer not allowed for this browser key" };
+      }
     }
 
     if (claimedProjectId && claimedProjectId !== projectId) {

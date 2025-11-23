@@ -50,7 +50,7 @@ export const useProject = () => {
         }
     }
 
-    const updateProject = async (id: string, updates: { name?: string, icon?: string }) => {
+    const updateProject = async (id: string, updates: { name?: string, icon?: string, allowedReferrers?: string[], regenerateServerKey?: boolean, regenerateBrowserKey?: boolean }) => {
         try {
             await fetchApi(`/api/projects/${id}`, {
                 method: 'PATCH',

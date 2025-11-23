@@ -274,6 +274,7 @@ const route = useRoute()
 const traceId = route.params.id as string
 const toast = useToast()
 const { fetchApi } = useCherryApi()
+const { selectedProjectId } = useProject()
 
 // --- Types ---
 interface LogEntry {
@@ -429,6 +430,12 @@ const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
     toast.add({ title: 'Copied to clipboard', icon: 'i-lucide-check', color: 'success' })
 }
+
+watch(() => selectedProjectId.value, (newVal, oldVal) => {
+    if (process.client && oldVal && newVal !== oldVal) {
+        navigateTo('/traces')
+    }
+})
 </script>
 
 <style scoped>

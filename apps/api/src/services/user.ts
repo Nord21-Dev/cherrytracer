@@ -1,6 +1,8 @@
 import { count, eq } from "drizzle-orm";
 import { db } from "../db";
 import { users, projects, logs } from "../db/schema";
+import { generateApiKey, invalidateProjectKeyCache } from "./auth";
+import { DEFAULT_DEV_REFERRERS, normalizeReferrers } from "./referrer";
 
 export const userService = {
   async isClaimable() {
@@ -11,8 +13,11 @@ export const userService = {
   async seedOnboardingData(userId: string) {
     const [project] = await db.insert(projects).values({
         name: "My First Project",
-        apiKey: "ct_" + crypto.randomUUID().replace(/-/g, ""),
+        apiKey: generateApiKey("server"),
+        browserApiKey: generateApiKey("browser"),
+        allowedReferrers: normalizeReferrers(DEFAULT_DEV_REFERRERS),
     }).returning();
+    invalidateProjectKeyCache();
 
     await db.insert(logs).values({
         projectId: project.id,

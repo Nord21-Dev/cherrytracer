@@ -8,14 +8,23 @@ export class CherryTracer {
   private baseContext: Record<string, any>;
 
   constructor(config: CherryConfig) {
+    const runtime = typeof window !== "undefined" ? "browser" : "server";
+    const defaultBaseUrl = config.baseUrl || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
+    const keyType = config.keyType || runtime;
+
     this.config = {
       apiKey: config.apiKey,
-      baseUrl: config.baseUrl || "http://localhost:3000",
+      baseUrl: defaultBaseUrl,
       projectId: config.projectId,
       flushInterval: config.flushInterval || 2000,
       batchSize: config.batchSize || 50,
       enabled: config.enabled ?? true,
+      keyType
     };
+
+    if (runtime === "browser" && (keyType !== "browser" || !this.config.apiKey.startsWith("ct_pub_"))) {
+      console.warn("[CherryTracer] Browser environment detected. Use a browser key restricted to allowed referrers.");
+    }
 
     this.baseContext = getContext();
 

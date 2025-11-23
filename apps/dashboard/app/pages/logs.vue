@@ -182,7 +182,7 @@ import VueJsonPretty from 'vue-json-pretty'
 import 'vue-json-pretty/lib/styles.css'
 
 const { fetchApi } = useCherryApi()
-const { selectedProject } = useProject()
+const { selectedProject, selectedProjectId } = useProject()
 const { newLogsCount, resetCount } = useRealtime()
 
 // State
@@ -223,6 +223,12 @@ watch(initialData, (newVal) => {
         logs.value = []
     }
 }, { immediate: true })
+
+watch(() => selectedProjectId.value, async (newVal, oldVal) => {
+    if (oldVal && newVal !== oldVal) {
+        await refreshLogs()
+    }
+})
 
 const loadMore = async () => {
     loadingMore.value = true
