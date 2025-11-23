@@ -2,8 +2,8 @@ export type LogLevel = "info" | "warn" | "error" | "debug";
 
 export interface CherryConfig {
   apiKey: string;
+  projectId: string; // Required to ensure logs go to the right place
   baseUrl?: string; // Defaults to production URL or localhost
-  projectId?: string; // Optional, mostly inferred from Key but good for context
   flushInterval?: number; // ms, default 2000
   batchSize?: number; // default 50
   enabled?: boolean; // default true

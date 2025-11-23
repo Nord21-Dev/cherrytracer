@@ -11,7 +11,7 @@ export class CherryTracer {
     this.config = {
       apiKey: config.apiKey,
       baseUrl: config.baseUrl || "http://localhost:3000",
-      projectId: config.projectId || "",
+      projectId: config.projectId,
       flushInterval: config.flushInterval || 2000,
       batchSize: config.batchSize || 50,
       enabled: config.enabled ?? true,
@@ -27,7 +27,7 @@ export class CherryTracer {
         }
       });
     }
-    
+
     // Start the flush timer
     this.startTimer();
   }
@@ -84,10 +84,10 @@ export class CherryTracer {
     return {
       id: spanId,
       traceId: traceId,
-      
+
       info: (msg, data) => this.emit("info", msg, data, traceId, spanId),
       error: (msg, data) => this.emit("error", msg, data, traceId, spanId),
-      
+
       end: (data?: any) => {
         const duration = Date.now() - startTime;
         this.emit("info", `Span Ended: ${name}`, {

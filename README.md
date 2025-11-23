@@ -105,36 +105,77 @@ Cherrytracer is built to be "One-Click" compatible.
 
 ## 📦 The Client SDK
 
-Our universal SDK works in **Node.js**, **Bun**, and the **Browser**. It is <2KB and uses "Smart Batching" to ensure it never slows down your app.
+Our universal SDK works in **Node.js**, **Bun**, and the **Browser**. It is <2KB, type-safe, and uses "Smart Batching" to ensure it never slows down your app.
+
+### Installation
 
 ```bash
 npm install cherrytracer
 ```
 
-### Usage
+### 1. Initialize
+Initialize the tracer once at the start of your application.
 
 ```typescript
 import { CherryTracer } from "cherrytracer";
 
-const logger = new CherryTracer({
-  apiKey: "ct_12345...", // Get this from your Dashboard (Settings)
-  baseUrl: "http://localhost" // Your API URL
+const cherry = new CherryTracer({
+  apiKey: "ct_...",           // Required: Your API Key
+  projectId: "my-saas-v1",    // Required: Group logs by project
+  baseUrl: "https://...",     // Optional: Your self-hosted instance URL
+  
+  // ⚡️ Performance Tuning (Optional)
+  enabled: true,              // Toggle globally (great for dev/prod environments)
+  batchSize: 50,              // Flush after 50 logs...
+  flushInterval: 2000,        // ...or every 2 seconds
+});
+```
+
+### 2. Logging
+Structured logging that just works. Pass any object as the second argument.
+
+```typescript
+cherry.info("User signed up", { 
+  userId: "u_123", 
+  plan: "pro", 
+  source: "landing_page" 
 });
 
-// 1. Standard Logging
-logger.info("User signed up", { plan: "pro", userId: 123 });
-logger.error("Payment failed", { error: err.message });
+cherry.error("Payment failed", { 
+  reason: "card_declined", 
+  amount: 9900 
+});
+```
 
-// 2. Tracing (Performance Monitoring)
-const span = logger.startSpan("checkout_process");
+### 3. Tracing (Performance Monitoring)
+Measure how long things take with **Spans**. Spans automatically track duration and group related logs together.
+
+```typescript
+const span = cherry.startSpan("process_order");
 
 try {
-  await processPayment();
-  span.end({ success: true }); // Automatically records duration
+  // You can log *inside* the span to keep context
+  span.info("Validating cart items");
+  await validateCart();
+  
+  span.info("Charging card");
+  await chargeCard();
+
+  // End the span to record the duration
+  span.end({ success: true, orderId: "o_789" });
 } catch (e) {
-  span.error("Card declined");
+  // Mark the span as errored
+  span.error("Order processing failed", { error: e.message });
   span.end({ success: false });
 }
+```
+
+### 4. Advanced Control
+The SDK handles batching automatically, but you can force a flush (e.g., before serverless function timeout).
+
+```typescript
+// Force immediate upload of all queued logs
+await cherry.flush();
 ```
 
 ---
