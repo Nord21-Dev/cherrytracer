@@ -7,10 +7,13 @@ export const useProject = () => {
     const baseURL = import.meta.server ? config.apiBase : undefined
 
     // Fetch list of projects available to this admin
+    const headers = import.meta.server ? useRequestHeaders(['cookie']) : {}
+    
     const { data: projects, status, refresh } = useFetch<any[]>('/api/projects', {
         key: 'projects-list',
         default: () => [],
         baseURL,
+        headers: headers as any
     })
 
     const selectedProject = computed(() => {

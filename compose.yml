@@ -1,8 +1,4 @@
 version: '3.8'
-x-config:
-  ADMIN_EMAIL: admin@example.com
-  ADMIN_PASSWORD: changeme123
-  DOMAIN: 'https://cherrytracer.printercow.com'
 services:
   proxy:
     image: 'nginx:alpine'
@@ -16,12 +12,8 @@ services:
     restart: always
     command: '/bin/sh -c "cd apps/api && bun run db:push && bun run src/index.ts"'
     environment:
-      ADMIN_EMAIL: admin@example.com
-      ADMIN_PASSWORD: changeme123
-      DOMAIN: 'https://cherrytracer.printercow.com'
       DATABASE_URL: 'postgres://cherry:cherry@db:5432/cherry'
       JWT_SECRET: auto_generated_internal_secret_key_change_if_you_want
-      PORT: 3000
     depends_on:
       db:
         condition: service_healthy
@@ -29,13 +21,8 @@ services:
     image: 'nord21dev/cherrytracer-dashboard:latest'
     restart: always
     environment:
-      NITRO_HOST: '0.0.0.0'
-      NITRO_PORT: '3000'
-      PORT: '3000'
-      HOST: '0.0.0.0'
-      NUXT_API_URL: 'http://api:3000'
-  # Uncomment if the dashboard cannot reach the API via the built-in /api proxy
-  # NUXT_PUBLIC_API_BASE_URL: '${DOMAIN:-https://cherrytracer.printercow.com}'
+      NODE_ENV: production
+      NUXT_API_BASE: 'http://api:3000'
     depends_on:
       - api
   db:
@@ -56,4 +43,3 @@ services:
       retries: 10
 volumes:
   cherry_data: null
-
