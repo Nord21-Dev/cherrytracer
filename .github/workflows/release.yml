@@ -42,7 +42,7 @@ jobs:
         uses: changesets/action@v1
         with:
           version: bunx changeset version
-          publish: bun --cwd packages/client run build && bunx changeset publish
+          publish: echo "Publishing handled in custom steps"
           commit: "chore: release"
           title: "chore: release"
         env:
@@ -50,33 +50,58 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Determine client version
-        if: steps.changesets.outputs.published == 'true'
-        id: client_version
+      - name: Determine released packages
+        id: releases
         run: |
-          VERSION=$(echo '${{ steps.changesets.outputs.publishedPackages }}' | jq -r 'map(select(.name=="cherrytracer"))[0].version // ""')
-          echo "client_version=$VERSION" >> "$GITHUB_OUTPUT"
-          if [ -z "$VERSION" ]; then
-            echo "No cherrytracer package published, skipping downstream release steps."
-          fi
+          set -euo pipefail
+
+          declare -A paths=(["cherrytracer"]="packages/client" ["api"]="apps/api" ["dashboard"]="apps/dashboard")
+
+          for name in "${!paths[@]}"; do
+            pkg_path="${paths[$name]}"
+            pkg_file="${pkg_path}/package.json"
+
+            if [ ! -f "$pkg_file" ]; then
+              echo "${name}_changed=false" >> "$GITHUB_OUTPUT"
+              echo "${name}_version=" >> "$GITHUB_OUTPUT"
+              continue
+            fi
+
+            current_version=$(jq -r '.version // empty' "$pkg_file")
+            previous_version=$(git show HEAD~1:"$pkg_file" 2>/dev/null | jq -r '.version // empty' || echo "")
+
+            if [ -n "$current_version" ] && [ "$current_version" != "$previous_version" ]; then
+              echo "${name}_changed=true" >> "$GITHUB_OUTPUT"
+              echo "${name}_version=$current_version" >> "$GITHUB_OUTPUT"
+            else
+              echo "${name}_changed=false" >> "$GITHUB_OUTPUT"
+              echo "${name}_version=$current_version" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
+      - name: Publish cherrytracer to npm
+        if: steps.releases.outputs.cherrytracer_changed == 'true'
+        run: |
+          bun --cwd packages/client run build
+          bunx changeset publish
 
       - name: Set up QEMU
-        if: steps.client_version.outputs.client_version != ''
+        if: steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        if: steps.client_version.outputs.client_version != ''
+        if: steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
-        if: steps.client_version.outputs.client_version != ''
+        if: steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push API image
-        if: steps.client_version.outputs.client_version != ''
+        if: steps.releases.outputs.api_changed == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -84,15 +109,15 @@ jobs:
           push: true
           tags: |
             nord21dev/cherrytracer-api:latest
-            nord21dev/cherrytracer-api:${{ steps.client_version.outputs.client_version }}
+            nord21dev/cherrytracer-api:${{ steps.releases.outputs.api_version }}
           build-args: |
-            APP_VERSION=${{ steps.client_version.outputs.client_version }}
+            APP_VERSION=${{ steps.releases.outputs.api_version }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha,scope=cherrytracer-api
           cache-to: type=gha,mode=max,scope=cherrytracer-api
 
       - name: Build and push Dashboard image
-        if: steps.client_version.outputs.client_version != ''
+        if: steps.releases.outputs.dashboard_changed == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -100,9 +125,9 @@ jobs:
           push: true
           tags: |
             nord21dev/cherrytracer-dashboard:latest
-            nord21dev/cherrytracer-dashboard:${{ steps.client_version.outputs.client_version }}
+            nord21dev/cherrytracer-dashboard:${{ steps.releases.outputs.dashboard_version }}
           build-args: |
-            APP_VERSION=${{ steps.client_version.outputs.client_version }}
+            APP_VERSION=${{ steps.releases.outputs.dashboard_version }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha,scope=cherrytracer-dashboard
           cache-to: type=gha,mode=max,scope=cherrytracer-dashboard
