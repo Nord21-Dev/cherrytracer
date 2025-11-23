@@ -41,17 +41,18 @@ The CI system monitors `main`. If it sees new changesets (those markdown files y
 *   **Action**: When you are ready to release, simply **merge this PR**.
 
 ### Step B: The Release Workflow
-As soon as the "Version Packages" PR is merged, the **Release** GitHub Action kicks in.
+As soon as the "Version Packages" PR is merged, the **Release** GitHub Action runs on `main`. It only proceeds past publishing if a real release happened.
 
 It performs the following steps automatically:
 
-1.  **Checks for Changes**: It looks at which packages had their versions bumped.
-2.  **Publishes to NPM**: If `packages/client` changed, it publishes the new version to NPM.
-3.  **Builds Docker Images**:
+1.  **Publish via Changesets**: `changesets/action` runs `bun run release`. If there are pending changesets, it publishes the npm package(s) and signals the rest of the workflow that a release occurred. If no publish happened (e.g., only the PR-creation pass), later steps are skipped.
+2.  **Detect Version Changes**: A small script diffs the pushed range (`before..sha`) to see which packages bumped versions.
+3.  **GitHub Releases**: For each package that changed, it creates a GitHub release using tags like `cherrytracer@1.2.0`, `api@1.2.0`, `dashboard@1.2.0`, pointing at the release commit.
+4.  **Publishes to NPM**: Only `packages/client` is published to NPM (driven by Changesets). The app packages stay private.
+5.  **Builds Docker Images**:
     *   If `apps/api` changed, it builds and pushes `nord21dev/cherrytracer-api`.
     *   If `apps/dashboard` changed, it builds and pushes `nord21dev/cherrytracer-dashboard`.
-    *   Images are tagged with `latest` and the specific version (e.g., `v1.2.0`).
-4.  **Git Tags**: It creates git tags for the release (e.g., `api-v1.2.0`, `dashboard-v1.2.0`).
+    *   Images are tagged with `latest` and the specific version (e.g., `0.1.2`).
 
 ## Troubleshooting
 

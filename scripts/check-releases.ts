@@ -9,6 +9,7 @@ const packages = {
 };
 
 const githubOutput = process.env.GITHUB_OUTPUT;
+const gitRangeEnv = (process.env.GIT_RANGE || "").trim();
 
 function run(command: string) {
     try {
@@ -27,6 +28,11 @@ function appendOutput(name: string, value: string) {
 }
 
 console.log("Checking for release version changes...");
+const diffRange =
+    gitRangeEnv.includes("..") && !gitRangeEnv.startsWith("..")
+        ? gitRangeEnv
+        : "HEAD^..HEAD";
+console.log(`Using git range: ${diffRange || "(default HEAD^..HEAD)"}`);
 
 for (const [name, path] of Object.entries(packages)) {
     const pkgPath = join(process.cwd(), path, "package.json");
@@ -38,7 +44,9 @@ for (const [name, path] of Object.entries(packages)) {
     }
 
     // Check if package.json changed in the last commit
-    const fileChanged = run(`git diff --name-only HEAD~1 HEAD -- ${relativePkgPath}`);
+    const fileChanged = run(
+        `git diff --name-only ${diffRange} -- ${relativePkgPath}`,
+    );
     if (!fileChanged) {
         console.log(`ℹ️ No file change detected for ${name}`);
         appendOutput(`${name}_changed`, "false");

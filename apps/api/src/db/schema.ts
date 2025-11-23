@@ -1,5 +1,5 @@
 import { pgTable, text, timestamp, jsonb, uuid, index, varchar } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // System Settings (Singleton pattern via primary key)
 export const systemSettings = pgTable("system_settings", {
@@ -42,9 +42,13 @@ export const logs = pgTable("logs", {
   index("project_idx").on(table.projectId),
   index("trace_idx").on(table.traceId),
   index("time_idx").on(table.timestamp),
-  
+  index("level_idx").on(table.level),
+
   // GIN Index for JSONB allows fast searching inside the JSON blob
-  index("data_gin_idx").using("gin", table.data), 
+  index("data_gin_idx").using("gin", table.data),
+
+  // Full Text Search Index for fast message searching
+  index("message_search_idx").using("gin", sql`to_tsvector('simple', ${table.message})`),
 ]);
 
 export const logsRelations = relations(logs, ({ one }) => ({
