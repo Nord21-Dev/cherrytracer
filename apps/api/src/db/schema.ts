@@ -22,6 +22,8 @@ export const projects = pgTable("projects", {
   name: text("name").notNull(),
   icon: text("icon").default("🍒"),
   apiKey: varchar("api_key", { length: 64 }).notNull().unique(),
+  browserApiKey: varchar("browser_api_key", { length: 64 }).unique(),
+  allowedReferrers: jsonb("allowed_referrers").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
