@@ -16,7 +16,7 @@ export const useCherryApi = () => {
       params.project_id = selectedProjectId.value
     }
 
-    const baseURL = import.meta.server ? config.apiBase : (config.public.apiBase || '/api')
+    const baseURL = import.meta.server ? config.apiBase : config.public.apiBase;
 
     return await $fetch<T>(endpoint, {
       ...opts,

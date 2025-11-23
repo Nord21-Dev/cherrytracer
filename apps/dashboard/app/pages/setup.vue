@@ -29,6 +29,7 @@
 definePageMeta({ layout: 'auth' })
 
 const { fetchUser } = useAuth()
+const config = useRuntimeConfig() 
 const email = ref('')
 const password = ref('')
 const loading = ref(false)
@@ -38,7 +39,8 @@ const onSubmit = async () => {
   try {
     await $fetch('/api/auth/setup', {
       method: 'POST',
-      body: { email: email.value, password: password.value }
+      body: { email: email.value, password: password.value },
+      baseURL: config.public.apiBase,
     })
     // Refresh auth state to log in immediately
     await fetchUser()

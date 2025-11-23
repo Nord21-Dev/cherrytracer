@@ -3,7 +3,7 @@ export const useAuth = () => {
     const loading = useState('auth-loading', () => false)
     const config = useRuntimeConfig()
 
-    const resolveBaseURL = () => (import.meta.server ? config.apiBase : '')
+    const resolveBaseURL = () => (import.meta.server ? config.apiBase : config.public.apiBase)
 
     const fetchUser = async () => {
         loading.value = true

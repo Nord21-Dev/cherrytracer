@@ -1,58 +1,38 @@
 // nuxt.config.ts
-const isProd = process.env.NODE_ENV === 'production'
-
 export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
     devtools: { enabled: true },
     modules: ['@nuxt/eslint', '@nuxt/ui', '@vueuse/nuxt', '@nuxt/icon'],
     css: ['~/assets/css/main.css'],
 
-    // Dev only – in Docker you use nginx
-    devServer: {
-        port: 3001
-    },
-
-    // Correct runtimeConfig: server vs client
+    // Nur Defaults, echte Werte kommen über Env-Variablen (NUXT_API_BASE, NUXT_PUBLIC_API_BASE)
     runtimeConfig: {
-        // Used on the server (SSR, server routes)
-        // In Docker, call the API container directly
-        apiBase: isProd ? 'http://api:3000' : 'http://localhost:3000',
-
+        // server-side only
+        apiBase: 'http://localhost:3000',     // wird in Docker von NUXT_API_BASE überschrieben
         public: {
-            // Used in the browser
-            // In Docker, hit nginx at /api (which proxies to api:3000)
-            apiBase: isProd ? '/api' : 'http://localhost:3000/api'
-        }
+            apiBase: '/api',                    // wird von NUXT_PUBLIC_API_BASE überschrieben
+        },
     },
 
     icon: {
-        localApiEndpoint: '/_nuxt_icon'
+        localApiEndpoint: '/_nuxt_icon',
     },
 
     ui: {
         theme: {
             defaultVariants: {
-                color: 'neutral'
-            }
-        }
+                color: 'neutral',
+            },
+        },
     },
 
     nitro: {
-        // Only proxy /api in local dev – NOT in production
-        routeRules: isProd
-            ? {}
-            : {
-                '/api/**': {
-                    proxy: 'http://localhost:3000/api/**'
+        // In Produktion KEINE /api-Proxy-Regel – das macht nginx
+        routeRules:
+            process.env.NODE_ENV === 'development'
+                ? {
+                    '/api/**': { proxy: 'http://localhost:3000/api/**' },
                 }
-            }
+                : {},
     },
-
-    vite: {
-        server: {
-            hmr: {
-                port: 24679
-            }
-        }
-    }
 })
