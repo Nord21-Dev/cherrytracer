@@ -9,7 +9,7 @@ export const systemSettings = pgTable("system_settings", {
 
 // Users: System administrators
 export const users = pgTable("users", {
-  id: uuid("id").defaultRandom().primaryKey(),
+  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -18,7 +18,7 @@ export const users = pgTable("users", {
 
 // Projects: Simple API Key management
 export const projects = pgTable("projects", {
-  id: uuid("id").defaultRandom().primaryKey(),
+  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
   name: text("name").notNull(),
   icon: text("icon").default("🍒"),
   apiKey: varchar("api_key", { length: 64 }).notNull().unique(),
@@ -29,7 +29,7 @@ export const projects = pgTable("projects", {
 
 // Logs: The heavy lifter
 export const logs = pgTable("logs", {
-  id: uuid("id").defaultRandom().primaryKey(),
+  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
   projectId: uuid("project_id").references(() => projects.id).notNull(),
   traceId: varchar("trace_id", { length: 64 }),
   spanId: varchar("span_id", { length: 64 }),
