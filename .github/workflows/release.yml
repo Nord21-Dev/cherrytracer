@@ -50,8 +50,25 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Check if this is a release PR merge
+        id: release_pr
+        run: |
+          set -euo pipefail
+          msg=$(git log -1 --pretty=%B)
+          if echo "$msg" | grep -qi "chore: release"; then
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip non-release merges
+        if: steps.release_pr.outputs.is_release == 'false' && github.event_name != 'workflow_dispatch'
+        run: echo "Not a release PR merge; exiting before publish/build."
+        shell: bash
+
       - name: Determine released packages
         id: releases
+        if: steps.release_pr.outputs.is_release == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
 
@@ -79,29 +96,58 @@ jobs:
             fi
           done
 
+      - name: Create git tags for released packages
+        if: (steps.release_pr.outputs.is_release == 'true' || github.event_name == 'workflow_dispatch') && (steps.releases.outputs.cherrytracer_changed == 'true' || steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true')
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          declare -A tags
+          if [ "${{ steps.releases.outputs.cherrytracer_changed }}" = "true" ]; then
+            tags["cherrytracer"]="cherrytracer-v${{ steps.releases.outputs.cherrytracer_version }}"
+          fi
+          if [ "${{ steps.releases.outputs.api_changed }}" = "true" ]; then
+            tags["api"]="api-v${{ steps.releases.outputs.api_version }}"
+          fi
+          if [ "${{ steps.releases.outputs.dashboard_changed }}" = "true" ]; then
+            tags["dashboard"]="dashboard-v${{ steps.releases.outputs.dashboard_version }}"
+          fi
+
+          for key in "${!tags[@]}"; do
+            tag="${tags[$key]}"
+            if git rev-parse "$tag" >/dev/null 2>&1; then
+              echo "Tag $tag already exists; skipping"
+              continue
+            fi
+            git tag "$tag"
+            git push origin "$tag"
+          done
+
       - name: Publish cherrytracer to npm
-        if: steps.releases.outputs.cherrytracer_changed == 'true'
+        if: (steps.release_pr.outputs.is_release == 'true' || github.event_name == 'workflow_dispatch') && steps.releases.outputs.cherrytracer_changed == 'true'
         run: |
           bun --cwd packages/client run build
           bunx changeset publish
 
       - name: Set up QEMU
-        if: steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true'
+        if: (steps.release_pr.outputs.is_release == 'true' || github.event_name == 'workflow_dispatch') && (steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true')
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        if: steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true'
+        if: (steps.release_pr.outputs.is_release == 'true' || github.event_name == 'workflow_dispatch') && (steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true')
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
-        if: steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true'
+        if: (steps.release_pr.outputs.is_release == 'true' || github.event_name == 'workflow_dispatch') && (steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true')
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push API image
-        if: steps.releases.outputs.api_changed == 'true'
+        if: (steps.release_pr.outputs.is_release == 'true' || github.event_name == 'workflow_dispatch') && steps.releases.outputs.api_changed == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -117,7 +163,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=cherrytracer-api
 
       - name: Build and push Dashboard image
-        if: steps.releases.outputs.dashboard_changed == 'true'
+        if: (steps.release_pr.outputs.is_release == 'true' || github.event_name == 'workflow_dispatch') && steps.releases.outputs.dashboard_changed == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
