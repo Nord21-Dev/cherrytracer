@@ -1,5 +1,11 @@
 # api
 
+## 0.0.10
+
+### Patch Changes
+
+- b9f4614: Improved performance and switched to Postgres18
+
 ## 0.0.9
 
 ### Patch Changes
