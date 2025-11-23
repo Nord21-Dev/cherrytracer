@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "main" ]
   release:
-    types: [published]
+    types: [published] # This triggers when you click "Publish Release" in GitHub UI
 
 jobs:
   build-and-push:
@@ -13,7 +13,7 @@ jobs:
       contents: read
       packages: write
     strategy:
-      fail-fast: false # If one fails (e.g. api), don't cancel the other (dashboard)
+      fail-fast: false
       matrix:
         include:
           - context: .
@@ -27,9 +27,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Generates tags automatically:
-      # 1. pushed to main -> :latest
-      # 2. released v1.0.0 -> :1.0.0 AND :latest (if default branch)
+      # 1. CALCULATE THE VERSION STRING
+      # If it's a release (v0.0.1), use "0.0.1". 
+      # If it's a commit to main, use "latest".
+      - name: Determine Version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # Strip the 'v' prefix (v0.0.1 -> 0.0.1)
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=latest" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -60,7 +70,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
-          # ⬇️ CACHING CONFIGURATION ⬇️
-          # Scoped by image name so API cache doesn't overwrite Dashboard cache
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          # 2. INJECT THE VERSION HERE
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.VERSION }}

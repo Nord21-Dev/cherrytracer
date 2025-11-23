@@ -37,42 +37,52 @@ Create a `docker-compose.yml`:
 version: '3.8'
 
 services:
-  # 1. The Ingestion API (Port 3000)
-  api:
-    image: nord21dev/cherrytracer-api:latest
+  proxy:
+    image: 'nginx:alpine'
     restart: always
     ports:
-      - "3000:3000"
-    environment:
-      - DATABASE_URL=postgres://cherry:cherry@db:5432/cherry
-      - JWT_SECRET=replace_with_super_secret_key
-      - ADMIN_EMAIL=admin@example.com
-      - ADMIN_PASSWORD=secure_password
+      - "80:80"
     depends_on:
-      - db
+      - api
+      - dashboard
+    command: "/bin/sh -c \"echo ' events { worker_connections 1024; }  http { \n  server { \n    listen 80; \n    client_max_body_size 10M;\n\n    # --- API Routes ---\n    location /api/ { \n      proxy_pass http://api:3000; \n      proxy_set_header Host \\$$host;\n      proxy_set_header X-Real-IP \\$$remote_addr;\n      proxy_set_header X-Forwarded-For \\$$proxy_add_x_forwarded_for;\n    } \n\n    location /ingest { \n      proxy_pass http://api:3000; \n      proxy_set_header Host \\$$host;\n      proxy_set_header X-Real-IP \\$$remote_addr;\n    } \n\n    # --- OpenAPI Fix ---\n    # 1. Handle the double-path bug seen in your logs\n    location = /openapi/openapi/json {\n      rewrite ^/openapi/openapi/json$ /openapi/json break;\n      proxy_pass http://api:3000;\n      proxy_set_header Host \\$$host;\n    }\n\n    # 2. Handle standard OpenAPI requests\n    location /openapi { \n      proxy_pass http://api:3000; \n      proxy_set_header Host \\$$host;\n    } \n\n    # --- Websockets ---\n    location /ws { \n      proxy_pass http://api:3000; \n      proxy_http_version 1.1; \n      proxy_set_header Upgrade \\$$http_upgrade; \n      proxy_set_header Connection \\\"Upgrade\\\"; \n      proxy_set_header Host \\$$host; \n    } \n\n    # --- Dashboard (Frontend) ---\n    location / { \n      proxy_pass http://dashboard:3000; \n      proxy_set_header Host \\$$host;\n      proxy_set_header X-Real-IP \\$$remote_addr;\n      proxy_set_header X-Forwarded-For \\$$proxy_add_x_forwarded_for;\n    } \n  } \n}' > /etc/nginx/nginx.conf && nginx -g 'daemon off;'\""
 
-  # 2. The Dashboard (Port 3001)
-  dashboard:
-    image: nord21dev/cherrytracer-dashboard:latest
+  api:
+    image: 'nord21dev/cherrytracer-api:latest'
     restart: always
-    ports:
-      - "3001:3000"
+    command: '/bin/sh -c "cd apps/api && bun run db:push && bun run src/index.ts"'
     environment:
-      - NUXT_API_URL=http://api:3000
-      # Optional: uncomment only when the browser must call a different origin
-      # - NUXT_PUBLIC_API_BASE_URL=https://your-api-host
+      DATABASE_URL: 'postgres://cherry:cherry@db:5432/cherry'
+      JWT_SECRET: auto_generated_internal_secret_key_change_if_you_want
+    depends_on:
+      db:
+        condition: service_healthy
+
+  dashboard:
+    image: 'nord21dev/cherrytracer-dashboard:latest'
+    restart: always
+    environment:
+      NODE_ENV: production
+      NUXT_API_BASE: 'http://api:3000'
     depends_on:
       - api
 
-  # 3. The Database
   db:
-    image: postgres:16-alpine
+    image: 'postgres:16-alpine'
+    restart: always
     volumes:
-      - cherry_data:/var/lib/postgresql/data
+      - 'cherry_data:/var/lib/postgresql/data'
     environment:
-      - POSTGRES_USER=cherry
-      - POSTGRES_PASSWORD=cherry
-      - POSTGRES_DB=cherry
+      POSTGRES_USER: cherry
+      POSTGRES_PASSWORD: cherry
+      POSTGRES_DB: cherry
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U cherry -d cherry'
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   cherry_data:
@@ -83,8 +93,8 @@ Run it:
 docker-compose up -d
 ```
 
-*   **Dashboard:** Visit **`http://localhost:3001`**. Log in with the credentials set in ENV.
-*   **API Endpoint:** `http://localhost:3000` (Use this in your SDK).
+*   **Dashboard:** Visit **`http://localhost`**.
+*   **API Endpoint:** `http://localhost` (Use this in your SDK).
 
 ### 2. Deploy via Coolify / Railway
 Cherrytracer is built to be "One-Click" compatible.
@@ -108,7 +118,7 @@ import { CherryTracer } from "cherrytracer";
 
 const logger = new CherryTracer({
   apiKey: "ct_12345...", // Get this from your Dashboard (Settings)
-  baseUrl: "http://localhost:3000" // Your API URL
+  baseUrl: "http://localhost" // Your API URL
 });
 
 // 1. Standard Logging

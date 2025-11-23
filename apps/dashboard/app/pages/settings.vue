@@ -67,6 +67,75 @@
                 </form>
             </UCard>
 
+            <!-- 🔄 AUTO UPDATE SECTION -->
+            <div class="my-8">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold">System Updates</h2>
+                    <UBadge v-if="versionInfo.update_available" color="primary" variant="solid" size="md" class="animate-pulse">
+                        New Version: v{{ versionInfo.latest }}
+                    </UBadge>
+                </div>
+
+                <UCard class="bg-white dark:bg-neutral-900 border-gray-200 dark:border-neutral-800">
+                    <div class="p-4 space-y-6">
+                        <!-- Version Comparison -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-3 bg-gray-50 dark:bg-neutral-950 rounded border border-gray-200 dark:border-neutral-800">
+                                <div class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Current Version</div>
+                                <div class="font-mono text-sm mt-1">v{{ versionInfo.current }}</div>
+                            </div>
+                            <div class="p-3 bg-gray-50 dark:bg-neutral-950 rounded border border-gray-200 dark:border-neutral-800">
+                                <div class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Latest Available</div>
+                                <div class="font-mono text-sm mt-1 text-primary-500">v{{ versionInfo.latest }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Changelog Preview (Only if update available) -->
+                        <div v-if="versionInfo.update_available && versionInfo.release_notes" class="text-sm bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-blue-800 dark:text-blue-200">
+                            <div class="font-bold mb-1">What's New:</div>
+                            <div class="whitespace-pre-wrap line-clamp-4 text-xs font-mono opacity-80">{{ versionInfo.release_notes }}</div>
+                            <a :href="versionInfo.release_url" target="_blank" class="block mt-2 underline opacity-70 hover:opacity-100">Read full changelog on GitHub</a>
+                        </div>
+
+                        <!-- Webhook Form -->
+                        <form @submit.prevent="saveStorage" class="space-y-4 pt-2 border-t border-gray-100 dark:border-neutral-800">
+                            <UFormField label="Coolify Redeploy Webhook">
+                                <UInput v-model="storageForm.updateWebhook" icon="i-lucide-webhook" type="password" placeholder="https://coolify.io/api/v1/deploy?..." />
+                            </UFormField>
+                            <p class="text-xs text-gray-500">
+                                Find this in Coolify under <b>Project -> Resources -> Webhooks</b>. Paste it here to enable one-click updates.
+                            </p>
+
+                            <UFormField label="Coolify API Token (Optional)">
+                                <UInput v-model="storageForm.deployToken" icon="i-lucide-key" type="password" placeholder="Bearer Token..." />
+                            </UFormField>
+                            <p class="text-xs text-gray-500">
+                                Only required if you are using the Coolify API directly instead of a public webhook.
+                            </p>
+                            
+                            <div class="flex justify-between items-center pt-2">
+                                <UButton type="submit" :loading="savingStorage" color="neutral" variant="ghost" size="xs">
+                                    Save Webhook
+                                </UButton>
+
+                                <UButton 
+                                    v-if="versionInfo.update_available" 
+                                    @click="triggerUpdate" 
+                                    color="primary" 
+                                    icon="i-lucide-sparkles"
+                                    :disabled="!storageForm.updateWebhook"
+                                >
+                                    Install Update Now
+                                </UButton>
+                                <UButton v-else disabled color="neutral" variant="soft" icon="i-lucide-check">
+                                    System Up to Date
+                                </UButton>
+                            </div>
+                        </form>
+                    </div>
+                </UCard>
+            </div>
+
             <!-- Storage Settings Section -->
             <div class="my-8">
                 <h2 class="text-lg font-semibold mb-4">Storage & Retention</h2>
@@ -111,7 +180,16 @@ definePageMeta({
 })
 
 const { selectedProject, updateProject } = useProject()
+const { startPolling } = useMaintenance() // Import the maintenance logic
 const toast = useToast()
+
+const versionInfo = ref({ 
+    current: '...', 
+    latest: '...', 
+    update_available: false,
+    release_notes: '',
+    release_url: ''
+})
 
 const icons = ['🚀', '⚡️', '🔮', '🪐', '💎', '🍒', '🏰', '🐳', '👻', '🤖']
 const saving = ref(false)
@@ -162,7 +240,9 @@ const copyToClipboard = async (text: string | undefined, label: string) => {
 // Storage Logic
 const storageForm = reactive({
     softLimitMb: 1024,
-    hardLimitMb: 5120
+    hardLimitMb: 5120,
+    updateWebhook: '',
+    deployToken: ''
 })
 const savingStorage = ref(false)
 const { fetchApi } = useCherryApi()
@@ -173,6 +253,16 @@ const loadStorage = async () => {
         const data = await fetchApi<any>('/api/system/storage', { skipProject: true })
         storageForm.softLimitMb = Math.round(data.soft_limit_bytes / 1024 / 1024)
         storageForm.hardLimitMb = Math.round(data.hard_limit_bytes / 1024 / 1024)
+        if (data.config?.updateWebhook) {
+            storageForm.updateWebhook = data.config.updateWebhook
+        }
+        if (data.config?.deployToken) {
+            storageForm.deployToken = data.config.deployToken
+        }
+
+        // 2. Get Version Info
+        const v = await fetchApi<any>('/api/system/version', { skipProject: true })
+        versionInfo.value = v
     } catch (e) { }
 }
 
@@ -190,6 +280,18 @@ const saveStorage = async () => {
         toast.add({ title: 'Error', description: 'Failed to update limits', color: 'error' })
     } finally {
         savingStorage.value = false
+    }
+}
+
+const triggerUpdate = async () => {
+    if (!confirm("This will restart the server to install the update. The dashboard will reconnect automatically. Continue?")) return;
+    
+    try {
+        await fetchApi('/api/system/update', { method: 'POST', skipProject: true })
+        // Start the UI overlay immediately
+        startPolling()
+    } catch(e) {
+        toast.add({ title: 'Update Failed', description: 'Check console for details.', color: 'error' })
     }
 }
 

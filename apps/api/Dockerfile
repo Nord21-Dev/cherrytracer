@@ -28,6 +28,11 @@ COPY --from=prune /app/out/full/ .
 FROM base AS runner
 WORKDIR /app
 
+# --- START CHANGE ---
+ARG APP_VERSION=0.0.1
+ENV APP_VERSION=$APP_VERSION
+# --- END CHANGE ---
+
 # Copy everything from builder (node_modules + source)
 COPY --from=builder /app .
 

@@ -14,16 +14,33 @@ export const systemRoutes = new Elysia({ prefix: "/system" })
             return { error: "Unauthorized" };
         }
     })
-    // Get Storage Info
-    .get("/storage", async () => {
-        return await systemService.getStorageStats();
+    // --- Versioning ---
+    .get("/version", async () => {
+        return await systemService.checkLatestVersion();
     })
-    // Update Limits
+    .post("/update", async () => {
+        return await systemService.triggerUpdate();
+    })
+
+    // --- Storage ---
+    .get("/storage", async () => {
+        const stats = await systemService.getStorageStats();
+        const config = await systemService.getStorageConfig();
+        // Return config specifically so frontend can populate the input
+        return { ...stats, config };
+    })
     .post("/storage", async ({ body }) => {
-        return await systemService.updateStorageConfig(body.softLimitMb, body.hardLimitMb);
+        return await systemService.updateStorageConfig(
+            body.softLimitMb,
+            body.hardLimitMb,
+            body.updateWebhook,
+            body.deployToken
+        );
     }, {
         body: t.Object({
             softLimitMb: t.Number(),
-            hardLimitMb: t.Number()
+            hardLimitMb: t.Number(),
+            updateWebhook: t.Optional(t.String()),
+            deployToken: t.Optional(t.String())
         })
     });
