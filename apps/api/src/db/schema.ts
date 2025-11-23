@@ -1,5 +1,5 @@
 import { pgTable, text, timestamp, jsonb, uuid, index, varchar } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // System Settings (Singleton pattern via primary key)
 export const systemSettings = pgTable("system_settings", {
@@ -9,7 +9,7 @@ export const systemSettings = pgTable("system_settings", {
 
 // Users: System administrators
 export const users = pgTable("users", {
-  id: uuid("id").defaultRandom().primaryKey(),
+  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -18,7 +18,7 @@ export const users = pgTable("users", {
 
 // Projects: Simple API Key management
 export const projects = pgTable("projects", {
-  id: uuid("id").defaultRandom().primaryKey(),
+  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
   name: text("name").notNull(),
   icon: text("icon").default("🍒"),
   apiKey: varchar("api_key", { length: 64 }).notNull().unique(),
@@ -29,7 +29,7 @@ export const projects = pgTable("projects", {
 
 // Logs: The heavy lifter
 export const logs = pgTable("logs", {
-  id: uuid("id").defaultRandom().primaryKey(),
+  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
   projectId: uuid("project_id").references(() => projects.id).notNull(),
   traceId: varchar("trace_id", { length: 64 }),
   spanId: varchar("span_id", { length: 64 }),
@@ -42,9 +42,13 @@ export const logs = pgTable("logs", {
   index("project_idx").on(table.projectId),
   index("trace_idx").on(table.traceId),
   index("time_idx").on(table.timestamp),
-  
+  index("level_idx").on(table.level),
+
   // GIN Index for JSONB allows fast searching inside the JSON blob
-  index("data_gin_idx").using("gin", table.data), 
+  index("data_gin_idx").using("gin", table.data),
+
+  // Full Text Search Index for fast message searching
+  index("message_search_idx").using("gin", sql`to_tsvector('simple', ${table.message})`),
 ]);
 
 export const logsRelations = relations(logs, ({ one }) => ({

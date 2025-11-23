@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import { jwt } from "@elysiajs/jwt";
 import { db } from "../db";
 import { logs, projects } from "../db/schema";
-import { and, desc, eq, gte, lte, sql, ilike } from "drizzle-orm";
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 
 export const queryRoutes = new Elysia()
     .use(
@@ -36,7 +36,9 @@ export const queryRoutes = new Elysia()
         if (trace_id) conditions.push(eq(logs.traceId, trace_id));
         if (start_date) conditions.push(gte(logs.timestamp, new Date(start_date)));
         if (end_date) conditions.push(lte(logs.timestamp, new Date(end_date)));
-        if (search) conditions.push(ilike(logs.message, `%${search}%`));
+        if (search) {
+            conditions.push(sql`to_tsvector('simple', ${logs.message}) @@ plainto_tsquery('simple', ${search})`);
+        }
 
         const data = await db.select()
             .from(logs)
