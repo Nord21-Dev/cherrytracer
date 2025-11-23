@@ -1,5 +1,12 @@
 # dashboard
 
+## 0.0.9
+
+### Patch Changes
+
+- 4982e5c: Added server and browser api keys
+- 01f7d4c: improved CI
+
 ## 0.0.8
 
 ### Patch Changes
