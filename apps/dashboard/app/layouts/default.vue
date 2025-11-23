@@ -42,6 +42,10 @@
             </nav>
 
             <ClientOnly>
+                <NewVersionWidget />
+            </ClientOnly>
+
+            <ClientOnly>
                 <StorageWidget />
             </ClientOnly>
 
@@ -86,6 +90,10 @@
                         </UNavigationMenu>
                     </nav>
                 </div>
+
+                <ClientOnly>
+                    <NewVersionWidget />
+                </ClientOnly>
 
                 <ClientOnly>
                     <StorageWidget />
