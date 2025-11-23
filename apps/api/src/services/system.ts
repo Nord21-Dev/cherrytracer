@@ -55,8 +55,7 @@ export const systemService = {
 
   async checkLatestVersion() {
     try {
-      // ⚠️ REPLACE 'nord21dev/cherrytracer' WITH YOUR ACTUAL REPO
-      const res = await fetch('https://api.github.com/repos/nord21dev/cherrytracer/releases/latest');
+      const res = await fetch('https://api.github.com/repos/nord21-dev/cherrytracer/releases/latest');
       if (!res.ok) throw new Error("GitHub API Error");
 
       const data = await res.json();
