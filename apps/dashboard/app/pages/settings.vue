@@ -68,10 +68,10 @@
             </UCard>
 
             <!-- 🔄 AUTO UPDATE SECTION -->
-            <div class="my-8">
+            <div class="my-8" id="system-updates">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-lg font-semibold">System Updates</h2>
-                    <UBadge v-if="versionInfo.update_available" color="primary" variant="solid" size="md" class="animate-pulse">
+                    <UBadge v-if="versionInfo.update_available" color="success" variant="solid" size="md" class="animate-pulse">
                         New Version: v{{ versionInfo.latest }}
                     </UBadge>
                 </div>
@@ -99,29 +99,33 @@
 
                         <!-- Webhook Form -->
                         <form @submit.prevent="saveStorage" class="space-y-4 pt-2 border-t border-gray-100 dark:border-neutral-800">
-                            <UFormField label="Coolify Redeploy Webhook">
+                            <div class="flex gap-4 flex-row items-center">
+                            <UFormField label="Deploy Webhook" required>
                                 <UInput v-model="storageForm.updateWebhook" icon="i-lucide-webhook" type="password" placeholder="https://coolify.io/api/v1/deploy?..." />
                             </UFormField>
-                            <p class="text-xs text-gray-500">
-                                Find this in Coolify under <b>Project -> Resources -> Webhooks</b>. Paste it here to enable one-click updates.
-                            </p>
-
-                            <UFormField label="Coolify API Token (Optional)">
+                            <UFormField label="API Token">
                                 <UInput v-model="storageForm.deployToken" icon="i-lucide-key" type="password" placeholder="Bearer Token..." />
                             </UFormField>
+                            </div>
                             <p class="text-xs text-gray-500">
-                                Only required if you are using the Coolify API directly instead of a public webhook.
+                                For Coolify users: Locate your webhook URL in Coolify by navigating to <b>Project → Resources → Webhooks</b>. Paste it here to enable seamless one-click updates.
+                                The API token is only required for Coolify.
                             </p>
                             
                             <div class="flex justify-between items-center pt-2">
-                                <UButton type="submit" :loading="savingStorage" color="neutral" variant="ghost" size="xs">
-                                    Save Webhook
-                                </UButton>
+                                <div class="flex gap-2">
+                                    <UButton type="submit" :loading="savingStorage" color="neutral" variant="soft" size="xs">
+                                        Save Webhook
+                                    </UButton>
+                                    <UButton @click="helpModalOpen = true" color="neutral" variant="ghost" size="xs" icon="i-lucide-badge-info">
+                                        Help
+                                    </UButton>
+                                </div>
 
                                 <UButton 
                                     v-if="versionInfo.update_available" 
                                     @click="triggerUpdate" 
-                                    color="primary" 
+                                    color="neutral" variant="subtle"
                                     icon="i-lucide-sparkles"
                                     :disabled="!storageForm.updateWebhook"
                                 >
@@ -163,7 +167,7 @@
                         </div>
 
                         <div class="flex justify-end">
-                            <UButton type="submit" :loading="savingStorage" color="neutral" variant="solid">
+                            <UButton type="submit" :loading="savingStorage" color="neutral" variant="subtle">
                                 Update Limits
                             </UButton>
                         </div>
@@ -171,6 +175,35 @@
                 </UCard>
             </div>
         </div>
+
+        <!-- Help Modal -->
+        <UModal v-model:open="helpModalOpen" title="Update Process">
+            <template #body>
+                <div class="space-y-4">
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Updating CherryTracer on PaaS platforms like Coolify, Railway, or any other service supporting Docker Compose is straightforward and safe.
+                    </p>
+                    <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                        <h4 class="font-semibold text-blue-900 dark:text-blue-100 mb-2">Simple Re-deployment</h4>
+                        <p class="text-sm text-blue-800 dark:text-blue-200">
+                            Simply trigger a re-deployment through your platform's interface. This automatically pulls the latest Docker image with all updates applied.
+                        </p>
+                    </div>
+                    <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                        <h4 class="font-semibold text-green-900 dark:text-green-100 mb-2">Data Safety Guaranteed</h4>
+                        <p class="text-sm text-green-800 dark:text-green-200">
+                            Your database is stored in persistent volumes, ensuring zero data loss during updates. No manual backups or migrations required.
+                        </p>
+                    </div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        The process is designed to be seamless - just redeploy and your instance will be updated automatically.
+                    </p>
+                </div>
+            </template>
+            <template #footer>
+                <UButton @click="helpModalOpen = false" color="primary">Got it</UButton>
+            </template>
+        </UModal>
     </UContainer>
 </template>
 
@@ -193,6 +226,7 @@ const versionInfo = ref({
 
 const icons = ['🚀', '⚡️', '🔮', '🪐', '💎', '🍒', '🏰', '🐳', '👻', '🤖']
 const saving = ref(false)
+const helpModalOpen = ref(false)
 
 const form = reactive({
     name: '',
@@ -274,10 +308,10 @@ const saveStorage = async () => {
             body: storageForm,
             skipProject: true
         })
-        toast.add({ title: 'Success', description: 'Storage limits updated', color: 'success' })
+        toast.add({ title: 'Success', description: 'System settings updated', color: 'success' })
         // Refresh page data or force widget refresh if using global state
     } catch (e) {
-        toast.add({ title: 'Error', description: 'Failed to update limits', color: 'error' })
+        toast.add({ title: 'Error', description: 'Failed to update system settings', color: 'error' })
     } finally {
         savingStorage.value = false
     }
