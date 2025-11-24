@@ -1,5 +1,11 @@
 # api
 
+## 0.0.12
+
+### Patch Changes
+
+- 2b47ab9: Fix Postgres Partition Query Error
+
 ## 0.0.11
 
 ### Patch Changes
