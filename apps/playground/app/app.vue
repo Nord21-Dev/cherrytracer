@@ -9,45 +9,66 @@
 
             <!-- Configuration -->
             <div class="card">
+                <h3 class="card-title">Configuration</h3>
                 <div class="row">
-                    <input v-model="config.projectId" placeholder="Project ID" class="input" />
-                    <input v-model="config.apiKey" placeholder="API Key" class="input" />
+                    <div class="input-group">
+                        <label class="label">Project ID</label>
+                        <input v-model="config.projectId" placeholder="e.g. prj_123..." class="input" />
+                    </div>
+                    <div class="input-group">
+                        <label class="label">Browser API Key (Public)</label>
+                        <input v-model="config.browserApiKey" placeholder="ct_pub_..." class="input" />
+                    </div>
+                    <div class="input-group">
+                        <label class="label">Server API Key (Secret)</label>
+                        <input v-model="config.serverApiKey" placeholder="ct_sk_..." class="input" type="password" />
+                    </div>
                 </div>
-                <button @click="init" class="btn btn-primary">Initialize Client</button>
+                <div class="row" style="margin-top: 1rem; justify-content: flex-end;">
+                    <button @click="init" class="btn btn-primary" :disabled="!config.browserApiKey">
+                        {{ ready ? 'Re-Initialize Client' : 'Initialize Client' }}
+                    </button>
+                </div>
             </div>
 
             <div v-if="ready" class="grid">
                 <!-- Manual Triggers -->
                 <div class="card">
-                    <h3 class="card-title">Scenarios</h3>
+                    <h3 class="card-title">Browser Scenarios</h3>
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <button @click="sim.checkoutSuccess()" class="btn btn-success" data-tooltip="Simulates a full checkout flow with multiple spans">
+                            <span>Successful Checkout</span>
+                            <span class="meta">Trace + 3 Spans</span>
+                        </button>
 
-                    <button @click="sim.checkoutSuccess()" class="btn btn-success">
-                        <span>Successful Checkout</span>
-                        <span class="meta">Trace + 3 Spans</span>
-                    </button>
-
-                    <button @click="sim.checkoutFail()" class="btn btn-danger">
-                        <span>Failed Payment</span>
-                        <span class="meta">Trace + Error</span>
-                    </button>
+                        <button @click="sim.checkoutFail()" class="btn btn-danger" data-tooltip="Simulates a payment failure with error logging">
+                            <span>Failed Payment</span>
+                            <span class="meta">Trace + Error</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Load Testing -->
                 <div class="card">
                     <h3 class="card-title">Load & Server</h3>
 
-                    <div class="row spaced">
-                        <span class="small">Auto-Pilot (Traffic)</span>
-                        <button @click="toggleAuto" :class="['toggle', { on: autoEnabled }]">
-                            <div class="knob" />
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div class="row spaced">
+                            <span class="small">Auto-Pilot (Traffic)</span>
+                            <button @click="toggleAuto" :class="['toggle', { on: autoEnabled }]" data-tooltip="Automatically generates random traffic">
+                                <div class="knob" />
+                            </button>
+                        </div>
+
+                        <button @click="sim.burst(1000)" class="btn" data-tooltip="Fires 1000 log events in rapid succession">
+                            🔥 Fire 1,000 Logs (Burst)
                         </button>
+
+                        <button @click="triggerServerLog" :disabled="loadingServer || !config.serverApiKey" class="btn" data-tooltip="Triggers a log from the Nuxt server using the Server Key">
+                            {{ loadingServer ? 'Processing...' : '☁️ Trigger Server-Side Log' }}
+                        </button>
+                        <p v-if="!config.serverApiKey" class="meta text-danger">Server Key required for server logs</p>
                     </div>
-
-                    <button @click="sim.burst(1000)" class="btn">🔥 Fire 1,000 Logs (Burst)</button>
-
-                    <button @click="triggerServerLog" :disabled="loadingServer" class="btn">
-                        {{ loadingServer ? 'Processing...' : '☁️ Trigger Server-Side Log' }}
-                    </button>
                 </div>
 
                 <!-- Request Console -->
@@ -65,15 +86,17 @@
                         </div>
                     </div>
 
-                    <button @click="sendDiagnosticLog" :disabled="requestPending" class="btn">
-                        <span v-if="requestPending">Sending…</span>
-                        <span v-else>📡 Send Diagnostic Event</span>
-                    </button>
+                    <div style="margin-top: 1rem;">
+                        <button @click="sendDiagnosticLog" :disabled="requestPending" class="btn" data-tooltip="Sends a single manual log entry">
+                            <span v-if="requestPending">Sending…</span>
+                            <span v-else>📡 Send Diagnostic Event</span>
+                        </button>
+                    </div>
 
                     <div class="console">
                         <div v-if="!requestHistory.length" class="muted center">No requests yet.</div>
                         <div v-for="entry in requestHistory" :key="entry.id" class="entry">
-                            <div>
+                            <div style="flex: 1;">
                                 <p :class="entry.ok ? 'text-success' : 'text-danger'" class="strong">
                                     {{ entry.status || '—' }} · {{ entry.ok ? 'SUCCESS' : 'FAILED' }}
                                 </p>
@@ -97,7 +120,8 @@ const API_BASE = 'http://localhost:3000'
 
 const config = reactive({
     projectId: '',
-    apiKey: '',
+    browserApiKey: '',
+    serverApiKey: '',
 })
 
 const ready = ref(false)
@@ -114,10 +138,13 @@ const createId = () =>
     : Math.random().toString(36).slice(2))
 
 const init = () => {
+    if (!config.browserApiKey) return
+
     const logger = new CherryTracer({
-        apiKey: config.apiKey,
+        apiKey: config.browserApiKey,
         projectId: config.projectId,
-        baseUrl: API_BASE
+        baseUrl: API_BASE,
+        batchSize: 250
     })
     sim = new Simulator(logger)
     ready.value = true
@@ -129,13 +156,36 @@ const toggleAuto = () => {
 }
 
 const triggerServerLog = async () => {
+    if (!config.serverApiKey) return
+    
     loadingServer.value = true
-    // Call Nuxt server route which uses the SDK internally
-    await $fetch('/api/test-log', {
-        method: 'POST',
-        body: { apiKey: config.apiKey }
-    })
-    loadingServer.value = false
+    try {
+        // Call Nuxt server route which uses the SDK internally
+        await $fetch('/api/test-log', {
+            method: 'POST',
+            body: { 
+                apiKey: config.serverApiKey,
+                projectId: config.projectId
+            }
+        })
+        pushRequestHistory({
+            id: createId(),
+            status: 200,
+            ok: true,
+            message: 'Server log triggered successfully',
+            timestamp: new Date().toISOString()
+        })
+    } catch (e: any) {
+        pushRequestHistory({
+            id: createId(),
+            status: 500,
+            ok: false,
+            message: e.message || 'Server log failed',
+            timestamp: new Date().toISOString()
+        })
+    } finally {
+        loadingServer.value = false
+    }
 }
 
 const sendDiagnosticLog = async () => {
@@ -144,7 +194,7 @@ const sendDiagnosticLog = async () => {
     try {
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
-            'x-api-key': config.apiKey
+            'x-api-key': config.browserApiKey
         }
 
         if (config.projectId) {
@@ -156,12 +206,12 @@ const sendDiagnosticLog = async () => {
             headers,
             body: JSON.stringify({
                 projectId: config.projectId,
-                events: {
+                events: [{
                     level: 'info',
                     message: 'Manual diagnostic ping',
                     data: { source: 'playground-console' },
                     timestamp
-                }
+                }]
             })
         })
 
@@ -171,7 +221,7 @@ const sendDiagnosticLog = async () => {
             id: createId(),
             status: response.status,
             ok: response.ok,
-            message: data?.error || `Queued ${data?.queued ?? 0} events`,
+            message: data?.error || `Queued events`,
             timestamp
         })
     } catch (error: any) {

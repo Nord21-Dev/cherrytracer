@@ -31,6 +31,8 @@ WORKDIR /app
 # --- START CHANGE ---
 ARG APP_VERSION=0.0.1
 ENV APP_VERSION=$APP_VERSION
+ENV LOG_PARTITIONING_ENABLED=true
+ENV LOG_PARTITIONING_AUTOCONVERT=true
 # --- END CHANGE ---
 
 # Copy everything from builder (node_modules + source)

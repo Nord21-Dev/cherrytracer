@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { logs } from "./db/schema";
 import { websocketService } from "./services/websocket";
+import { partitioningService } from "./services/partitioning";
 
 type NewLog = typeof logs.$inferInsert;
 
@@ -29,6 +30,18 @@ class IngestQueue {
     });
 
     try {
+      if (await partitioningService.isPartitionedLogsTable()) {
+        const timestamps = batch
+          .map((log) => log.timestamp)
+          .filter((value): value is Date => value instanceof Date);
+
+        if (timestamps.length) {
+          const min = new Date(Math.min(...timestamps.map((t) => t.getTime())));
+          const max = new Date(Math.max(...timestamps.map((t) => t.getTime())));
+          await partitioningService.ensurePartitionsForRange(min, max);
+        }
+      }
+
       console.log(`[Queue] Flushing ${batch.length} logs...`);
       await db.insert(logs).values(batch);
 
@@ -56,6 +69,13 @@ class IngestQueue {
 
   constructor() {
     this.start();
+
+    // Prepare partitions early so ingestion never fails right after midnight
+    partitioningService.ensurePartitionedTable()
+      .then(() => partitioningService.warmupPartitions())
+      .catch((error) => {
+        console.warn("[Queue] Failed to prepare partitions", error);
+      });
     
     const shutdown = async () => {
       console.log("🛑 Shutting down ingest queue...");
@@ -68,10 +88,14 @@ class IngestQueue {
     process.on('SIGTERM', shutdown);
   }
 
+  public remainingCapacity() {
+    return this.MAX_QUEUE_SIZE - this.queue.length;
+  }
+
   public add(log: NewLog) {
     if (this.queue.length >= this.MAX_QUEUE_SIZE) {
       console.warn(`[Queue] ⚠️ Dropping log, queue full (${this.queue.length})`);
-      return; 
+      return false; 
     }
 
     this.queue.push(log);
@@ -79,6 +103,8 @@ class IngestQueue {
     if (this.queue.length >= this.BATCH_SIZE) {
       this.flush();
     }
+
+    return true;
   }
 
   public start() {

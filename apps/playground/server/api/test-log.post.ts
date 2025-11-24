@@ -1,28 +1,23 @@
 import { CherryTracer } from 'cherrytracer'
 
-// We instantiate outside the handler to simulate a singleton in a real app
-// In a real app, this would be in a plugin
-let logger: CherryTracer | null = null;
-
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  
-  // Initialize singleton if needed
-  if (!logger) {
-    logger = new CherryTracer({
-      apiKey: body.apiKey,
-      baseUrl: 'http://localhost:3000',
-      projectId: 'server-side-process'
-    })
-  }
+
+  // For the playground, we instantiate a new tracer per request to allow changing keys/projects dynamically.
+  // In a real app, you would likely use a singleton or a request-scoped instance from a plugin.
+  const logger = new CherryTracer({
+    apiKey: body.apiKey,
+    baseUrl: 'http://localhost:3000',
+    projectId: body.projectId || 'server-side-playground'
+  })
 
   // Perform a Server-Side Trace
   const span = logger.startSpan("server_handler");
-  
+
   try {
-    span.info("Received request from Nuxt Server", { 
+    span.info("Received request from Nuxt Server", {
       headers: getRequestHeaders(event),
-      node_version: process.version 
+      node_version: process.version
     });
 
     // Simulate DB work
