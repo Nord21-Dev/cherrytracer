@@ -16,18 +16,13 @@
                 </div>
             </div>
         </div>
-        
-
 
         <!-- Filters Toolbar -->
         <FilterBar
             v-model:search="filters.search"
             v-model:filters="filters.structured"
             @refresh="refreshLogs"
-        >
-            <USelectMenu v-model="filters.level" :items="['info', 'warn', 'error', 'debug']" placeholder="Level"
-                size="sm" class="w-32" @change="() => refreshLogs()" />
-        </FilterBar>
+        />
 
         <!-- Logs Table -->
         <UCard>
@@ -196,8 +191,25 @@ watch(isLive, (val) => {
 // Filters
 const filters = reactive({
     search: '',
-    level: undefined,
+    level: undefined as string | undefined,
     structured: {} as Record<string, string>
+})
+
+// Sync level from structured filters to specific level filter
+watch(() => filters.structured.level, (newLevel) => {
+    if (newLevel !== filters.level) {
+        filters.level = newLevel
+    }
+})
+
+// Sync level from specific filter to structured filters
+watch(() => filters.level, (newLevel) => {
+    if (newLevel && filters.structured.level !== newLevel) {
+        filters.structured.level = newLevel
+    } else if (!newLevel && filters.structured.level) {
+        const { level, ...rest } = filters.structured
+        filters.structured = rest
+    }
 })
 
 // Color mode for VueJsonPretty
