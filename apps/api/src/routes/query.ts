@@ -27,7 +27,7 @@ export const queryRoutes = new Elysia()
     .get("/logs", async ({ query }) => {
         const {
             project_id, limit = "50", offset = "0",
-            level, search, start_date, end_date, trace_id
+            level, search, start_date, end_date, trace_id, filters
         } = query;
 
         const conditions = [eq(logs.projectId, project_id)];
@@ -38,6 +38,20 @@ export const queryRoutes = new Elysia()
         if (end_date) conditions.push(lte(logs.timestamp, new Date(end_date)));
         if (search) {
             conditions.push(sql`to_tsvector('simple', ${logs.message}) @@ plainto_tsquery('simple', ${search})`);
+        }
+
+        if (filters) {
+            try {
+                const parsed = JSON.parse(filters) as Record<string, string>;
+                for (const [key, value] of Object.entries(parsed)) {
+                    if (key.startsWith('data.')) {
+                        const jsonKey = key.slice(5);
+                        conditions.push(sql`${logs.data}->>${jsonKey} = ${value}`);
+                    }
+                }
+            } catch (e) {
+                // Ignore invalid JSON
+            }
         }
 
         const data = await db.select()
@@ -58,7 +72,8 @@ export const queryRoutes = new Elysia()
             search: t.Optional(t.String()),
             start_date: t.Optional(t.String()),
             end_date: t.Optional(t.String()),
-            trace_id: t.Optional(t.String())
+            trace_id: t.Optional(t.String()),
+            filters: t.Optional(t.String()) // JSON string of Record<string, string>
         })
     })
     .get("/stats", async ({ query }) => {
