@@ -1,5 +1,11 @@
 # dashboard
 
+## 0.0.10
+
+### Patch Changes
+
+- e126935: Perf. improv. and bug fixing
+
 ## 0.0.9
 
 ### Patch Changes
