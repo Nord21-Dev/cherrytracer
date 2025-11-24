@@ -54,6 +54,9 @@
                                     class="px-4 py-2 font-medium w-24 border-b border-gray-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
                                     Level</th>
                                 <th
+                                    class="px-4 py-2 font-medium w-28 border-b border-gray-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
+                                    Source</th>
+                                <th
                                     class="px-4 py-2 font-medium border-b border-gray-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
                                     Message</th>
                                 <th
@@ -75,6 +78,12 @@
                                         {{ log.level }}
                                     </UBadge>
                                 </td>
+                                <td class="px-4 py-2">
+                                    <UBadge :color="getSourceColor(log.source)" variant="subtle" size="xs"
+                                        class="uppercase tracking-wider font-semibold scale-90 origin-left">
+                                        {{ formatSource(log.source) }}
+                                    </UBadge>
+                                </td>
                                 <td class="px-4 py-2 text-gray-700 dark:text-neutral-300">
                                     <p
                                         class="text-xs font-mono text-gray-900 dark:text-neutral-100 opacity-90 group-hover:opacity-100 break-all">
@@ -89,7 +98,7 @@
                                     <UButton v-if="log.traceId" :to="`/traces/${log.traceId}`" variant="ghost"
                                         color="primary" size="xs" @click.stop
                                         class="font-mono px-2 py-1 text-[11px] hover:bg-primary-500/10">
-                                        {{ log.traceId.slice(0, 8) }}...
+                                        View Trace
                                     </UButton>
                                     <span v-else class="text-gray-400 dark:text-neutral-600 tracking-widest">—</span>
                                 </td>
@@ -127,6 +136,10 @@
                         <div>
                             <label class="text-xs text-gray-500 dark:text-neutral-500 uppercase font-bold">Level</label>
                             <div class="mt-1 uppercase">{{ selectedLog.level }}</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-500 dark:text-neutral-500 uppercase font-bold">Source</label>
+                            <div class="mt-1 uppercase">{{ formatSource(selectedLog.source) }}</div>
                         </div>
                         <div>
                             <label
@@ -274,6 +287,17 @@ const getLevelColor = (level: string) => {
         case 'debug': return 'info'
         default: return 'primary'
     }
+}
+
+const formatSource = (source?: string) => {
+    if (source === 'browser') return 'Browser'
+    if (source === 'server') return 'Server'
+    return 'Unknown'
+}
+
+const getSourceColor = (source?: string) => {
+    if (source === 'browser') return 'neutral'
+    return 'error'
 }
 
 const openDrawer = (log: any) => {

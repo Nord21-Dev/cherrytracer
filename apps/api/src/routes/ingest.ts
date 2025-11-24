@@ -123,6 +123,7 @@ export const ingestRoutes = new Elysia({ prefix: "/ingest" })
     for (const event of events) {
       const ok = ingestQueue.add({
         projectId,
+        source: keyType === "browser" ? "browser" : "server",
         traceId: event.traceId || null,
         spanId: event.spanId || null,
         level: event.level || "info",
