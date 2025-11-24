@@ -1,5 +1,18 @@
 # api
 
+## 0.0.10
+
+### Patch Changes
+
+- b9f4614: Improved performance and switched to Postgres18
+
+## 0.0.9
+
+### Patch Changes
+
+- 4982e5c: Added server and browser api keys
+- 01f7d4c: improved CI
+
 ## 0.0.8
 
 ### Patch Changes
