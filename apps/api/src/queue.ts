@@ -12,10 +12,29 @@ class IngestQueue {
   private readonly FLUSH_INTERVAL_MS = 2000;
   // SAFETY CAP: If we hold more than 10k logs in RAM, drop new ones to save the server.
   private readonly MAX_QUEUE_SIZE = 10000; 
-  
+
   private interval: Timer | null = null;
   private isFlushing = false;
-  
+  private notificationBuffer: Map<string, number> = new Map();
+  private notificationFlushScheduled = false;
+
+  private scheduleNotificationFlush() {
+    if (this.notificationFlushScheduled) return;
+
+    this.notificationFlushScheduled = true;
+    setImmediate(() => {
+      this.notificationFlushScheduled = false;
+      if (this.notificationBuffer.size === 0) return;
+
+      const pending = this.notificationBuffer;
+      this.notificationBuffer = new Map();
+
+      for (const [projectId, count] of pending) {
+        websocketService.broadcast(projectId, 'new_logs', { count });
+      }
+    });
+  }
+
   private flush = async (force = false) => {
     if (this.isFlushing && !force) return;
     if (this.queue.length === 0) return;
@@ -46,8 +65,11 @@ class IngestQueue {
       await db.insert(logs).values(batch);
 
       for (const [projectId, count] of projectCounts) {
-          websocketService.broadcast(projectId, 'new_logs', { count });
+          const existing = this.notificationBuffer.get(projectId) || 0;
+          this.notificationBuffer.set(projectId, existing + count);
       }
+
+      this.scheduleNotificationFlush();
 
     } catch (error) {
       console.error("[Queue] ⚠️ Flush failed:", error);
