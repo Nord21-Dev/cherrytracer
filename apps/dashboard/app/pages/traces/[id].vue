@@ -4,7 +4,7 @@
         class="sticky top-0 z-50 border-b border-gray-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl">
         <UContainer class="flex items-center justify-between py-4">
             <div class="flex items-center gap-4">
-                <UButton icon="i-lucide-arrow-left" variant="ghost" color="neutral" to="/" label="Back to Logs"
+                <UButton icon="i-lucide-arrow-left" variant="ghost" color="neutral" to="/logs" label="Back to Logs"
                     size="xs" />
             </div>
 
@@ -283,6 +283,7 @@ interface LogEntry {
     level: 'info' | 'warn' | 'error' | 'debug'
     message: string
     spanId?: string
+    source?: string
     data?: Record<string, any>
 }
 

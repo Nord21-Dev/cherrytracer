@@ -60,9 +60,10 @@ const coerceHeader = (value: string | string[] | undefined) => {
 
 export const ingestRoutes = new Elysia({ prefix: "/ingest" })
   .post("/", async ({ body, headers, set }) => {
+    console.log(headers);
     const apiKey = coerceHeader(headers["x-api-key"]);
     const headerProjectId = coerceHeader(headers["x-project-id"]);
-    const refererHeader = coerceHeader(headers["referer"] || headers["referrer"]);
+    const refererHeader = coerceHeader(headers["referer"] || headers["referrer"] || headers["Referer"]);
 
     if (!apiKey) {
       set.status = 401;
@@ -111,9 +112,18 @@ export const ingestRoutes = new Elysia({ prefix: "/ingest" })
       return { error: "Project mismatch for provided API Key" };
     }
 
+    const remainingCapacity = ingestQueue.remainingCapacity();
+    if (events.length > remainingCapacity) {
+      set.status = 429;
+      set.headers["Retry-After"] = "1";
+      return { error: "Ingest backlog full, retry shortly", queued: 0, dropped: events.length };
+    }
+
+    let accepted = 0;
     for (const event of events) {
-      ingestQueue.add({
+      const ok = ingestQueue.add({
         projectId,
+        source: keyType === "browser" ? "browser" : "server",
         traceId: event.traceId || null,
         spanId: event.spanId || null,
         level: event.level || "info",
@@ -121,9 +131,17 @@ export const ingestRoutes = new Elysia({ prefix: "/ingest" })
         data: event.data || {},
         timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
       });
+
+      if (!ok) {
+        set.status = 429;
+        set.headers["Retry-After"] = "1";
+        return { error: "Ingest backlog full, retry shortly", queued: accepted, dropped: events.length - accepted };
+      }
+
+      accepted++;
     }
 
-    return { success: true, projectId, queued: events.length };
+    return { success: true, projectId, queued: accepted };
   }, {
     detail: {
       summary: "Ingest Logs",
@@ -131,8 +149,11 @@ export const ingestRoutes = new Elysia({ prefix: "/ingest" })
     },
     headers: t.Object({
       "x-api-key": t.String({ description: "Your Project API Key" }),
-      "x-project-id": t.Optional(t.String({ description: "Optional: Explicit Project ID for validation" }))
-    }),
+      "x-project-id": t.Optional(t.String({ description: "Optional: Explicit Project ID for validation" })),
+      "referer": t.Optional(t.String()),
+      "referrer": t.Optional(t.String()),
+      "Referer": t.Optional(t.String())
+    }, { additionalProperties: true }),
     body: t.Union([
       logSchema,
       t.Array(logSchema),

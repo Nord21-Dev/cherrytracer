@@ -6,6 +6,11 @@ export class CherryTracer {
   private config: Required<CherryConfig>;
   private flushTimer: any = null;
   private baseContext: Record<string, any>;
+  private isFlushing = false;
+  private pendingFlush = false;
+  private retryDelayMs = 0;
+  private readonly BASE_RETRY_DELAY = 500;
+  private readonly MAX_RETRY_DELAY = 10000;
 
   constructor(config: CherryConfig) {
     const runtime = typeof window !== "undefined" ? "browser" : "server";
@@ -114,41 +119,66 @@ export class CherryTracer {
   public async flush(useBeacon = false) {
     if (this.queue.length === 0) return;
 
-    const batch = [...this.queue];
-    this.queue = [];
+    if (this.isFlushing) {
+      this.pendingFlush = true;
+      return;
+    }
 
-    try {
-      const url = `${this.config.baseUrl}/ingest`;
-      const payload = this.config.projectId
-        ? JSON.stringify({ projectId: this.config.projectId, events: batch })
-        : JSON.stringify(batch);
+    this.isFlushing = true;
 
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        "x-api-key": this.config.apiKey,
-      };
+    while (this.queue.length) {
+      const batch = this.queue.splice(0, this.config.batchSize);
 
-      if (this.config.projectId) {
-        headers["x-project-id"] = this.config.projectId;
+      try {
+        await this.sendBatch(batch, useBeacon);
+        this.retryDelayMs = 0;
+      } catch (e) {
+        // Re-queue the failed batch at the front and retry with backoff.
+        this.queue.unshift(...batch);
+
+        const delay = this.retryDelayMs || this.BASE_RETRY_DELAY;
+        this.retryDelayMs = Math.min(delay * 2, this.MAX_RETRY_DELAY);
+        setTimeout(() => this.flush(useBeacon), delay);
+        break;
       }
+    }
 
-      // Browser "Beacon" attempt for reliability on close
-      if (useBeacon && typeof navigator !== "undefined" && typeof navigator.sendBeacon !== "undefined") {
-        // sendBeacon doesn't allow custom headers easily with JSON, 
-        // so we fallback to fetch with keepalive usually.
-        // However, if we strictly need headers for Auth, fetch keepalive is the modern way.
-      }
+    this.isFlushing = false;
 
-      await fetch(url, {
-        method: "POST",
-        keepalive: true, // Crucial for browser unload
-        headers,
-        body: payload,
-      });
-    } catch (e) {
-      // Fail silently - never crash the host app
-      // Optionally: console.error('Cherrytracer lost logs', e);
-      // In a robust SDK, we might re-queue failed logs here up to a limit.
+    if (this.pendingFlush && this.queue.length) {
+      this.pendingFlush = false;
+      this.flush(useBeacon);
+    }
+  }
+
+  private async sendBatch(batch: LogEvent[], useBeacon: boolean) {
+    const url = `${this.config.baseUrl}/ingest`;
+    const payload = this.config.projectId
+      ? JSON.stringify({ projectId: this.config.projectId, events: batch })
+      : JSON.stringify(batch);
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "x-api-key": this.config.apiKey,
+    };
+
+    if (this.config.projectId) {
+      headers["x-project-id"] = this.config.projectId;
+    }
+
+    const requestInit: RequestInit = {
+      method: "POST",
+      headers,
+      body: payload,
+    };
+
+    if (useBeacon) {
+      requestInit.keepalive = true; // Only use keepalive for unload scenarios
+    }
+
+    const response = await fetch(url, requestInit);
+    if (!response.ok) {
+      throw new Error(`Ingest failed with status ${response.status}`);
     }
   }
 }

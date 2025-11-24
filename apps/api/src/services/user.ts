@@ -21,6 +21,7 @@ export const userService = {
 
     await db.insert(logs).values({
         projectId: project.id,
+        source: "server",
         level: "info",
         message: "🍒 Cherrytracer installed successfully! This is your first log.",
         traceId: crypto.randomUUID().split('-')[0],

@@ -1,45 +1,28 @@
 <template>
     <UContainer class="py-8 space-y-6">
         <!-- 1. Header & Controls -->
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex flex-row md:items-center justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Logs</h1>
             </div>
-        </div>
-        
-        <!-- 🔔 New Logs Notification -->
-        <transition
-            enter-active-class="transition duration-300 ease-out"
-            enter-from-class="transform -translate-y-2 opacity-0"
-            enter-to-class="transform translate-y-0 opacity-100"
-            leave-active-class="transition duration-200 ease-in"
-            leave-from-class="transform translate-y-0 opacity-100"
-            leave-to-class="transform -translate-y-2 opacity-0"
-        >
-            <div v-if="newLogsCount > 0" class="flex justify-center">
-                <button 
-                    @click="refreshLogs"
-                    class="flex items-center gap-2 bg-primary-500 text-white px-4 py-2 rounded-full shadow-lg hover:bg-primary-600 transition-all font-medium text-sm"
-                >
-                    <UIcon name="i-lucide-arrow-up-circle" class="w-4 h-4 animate-bounce" />
-                    <span>{{ newLogsCount }} new logs available</span>
-                </button>
+            <div class="flex items-center gap-3">
+                <UBadge v-if="!isLive && newLogsCount > 0" color="primary" variant="solid" size="xs"
+                    class="rounded-full">
+                    {{ newLogsCount }}
+                </UBadge>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Live data</span>
+                    <USwitch v-model="isLive" />
+                </div>
             </div>
-        </transition>
+        </div>
 
         <!-- Filters Toolbar -->
-        <div
-            class="flex items-center gap-3 bg-gray-50 dark:bg-neutral-900/50 p-3 rounded-lg border border-gray-200 dark:border-neutral-800">
-            <UInput v-model="filters.search" icon="i-lucide-search" placeholder="Search messages..." class="w-64"
-                size="sm" @keyup.enter="refresh" />
-
-            <USelectMenu v-model="filters.level" :items="['info', 'warn', 'error', 'debug']" placeholder="Level"
-                size="sm" class="w-32" @change="() => refresh()" />
-
-            <div class="flex-1" />
-
-            <UButton icon="i-lucide-refresh-cw" variant="ghost" color="neutral" @click="() => refresh()" />
-        </div>
+        <FilterBar
+            v-model:search="filters.search"
+            v-model:filters="filters.structured"
+            @refresh="refreshLogs"
+        />
 
         <!-- Logs Table -->
         <UCard>
@@ -71,6 +54,9 @@
                                     class="px-4 py-2 font-medium w-24 border-b border-gray-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
                                     Level</th>
                                 <th
+                                    class="px-4 py-2 font-medium w-28 border-b border-gray-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
+                                    Source</th>
+                                <th
                                     class="px-4 py-2 font-medium border-b border-gray-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
                                     Message</th>
                                 <th
@@ -92,6 +78,12 @@
                                         {{ log.level }}
                                     </UBadge>
                                 </td>
+                                <td class="px-4 py-2">
+                                    <UBadge :color="getSourceColor(log.source)" variant="subtle" size="xs"
+                                        class="uppercase tracking-wider font-semibold scale-90 origin-left">
+                                        {{ formatSource(log.source) }}
+                                    </UBadge>
+                                </td>
                                 <td class="px-4 py-2 text-gray-700 dark:text-neutral-300">
                                     <p
                                         class="text-xs font-mono text-gray-900 dark:text-neutral-100 opacity-90 group-hover:opacity-100 break-all">
@@ -106,7 +98,7 @@
                                     <UButton v-if="log.traceId" :to="`/traces/${log.traceId}`" variant="ghost"
                                         color="primary" size="xs" @click.stop
                                         class="font-mono px-2 py-1 text-[11px] hover:bg-primary-500/10">
-                                        {{ log.traceId.slice(0, 8) }}...
+                                        View Trace
                                     </UButton>
                                     <span v-else class="text-gray-400 dark:text-neutral-600 tracking-widest">—</span>
                                 </td>
@@ -144,6 +136,10 @@
                         <div>
                             <label class="text-xs text-gray-500 dark:text-neutral-500 uppercase font-bold">Level</label>
                             <div class="mt-1 uppercase">{{ selectedLog.level }}</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-500 dark:text-neutral-500 uppercase font-bold">Source</label>
+                            <div class="mt-1 uppercase">{{ formatSource(selectedLog.source) }}</div>
                         </div>
                         <div>
                             <label
@@ -191,11 +187,42 @@ const offset = ref(0)
 const loadingMore = ref(false)
 const isDrawerOpen = ref(false)
 const selectedLog = ref<any>(null)
+const isLive = ref(true)
+
+watch(() => newLogsCount.value, (count) => {
+    if (isLive.value && count > 0) {
+        refreshLogs()
+    }
+})
+
+watch(isLive, (val) => {
+    if (val && newLogsCount.value > 0) {
+        refreshLogs()
+    }
+})
 
 // Filters
 const filters = reactive({
     search: '',
-    level: undefined
+    level: undefined as string | undefined,
+    structured: {} as Record<string, string>
+})
+
+// Sync level from structured filters to specific level filter
+watch(() => filters.structured.level, (newLevel) => {
+    if (newLevel !== filters.level) {
+        filters.level = newLevel
+    }
+})
+
+// Sync level from specific filter to structured filters
+watch(() => filters.level, (newLevel) => {
+    if (newLevel && filters.structured.level !== newLevel) {
+        filters.structured.level = newLevel
+    } else if (!newLevel && filters.structured.level) {
+        const { level, ...rest } = filters.structured
+        filters.structured = rest
+    }
 })
 
 // Color mode for VueJsonPretty
@@ -209,7 +236,8 @@ const { data: initialData, pending, refresh } = await useAsyncData('logs',
             limit: 50,
             offset: 0,
             search: filters.search,
-            level: filters.level
+            level: filters.level,
+            filters: JSON.stringify(filters.structured)
         }
     }),
     { watch: [filters], server: false }
@@ -238,7 +266,8 @@ const loadMore = async () => {
             limit: 50,
             offset: nextOffset,
             search: filters.search,
-            level: filters.level
+            level: filters.level,
+            filters: JSON.stringify(filters.structured)
         }
     })
     if (res?.data) {
@@ -258,6 +287,17 @@ const getLevelColor = (level: string) => {
         case 'debug': return 'info'
         default: return 'primary'
     }
+}
+
+const formatSource = (source?: string) => {
+    if (source === 'browser') return 'Browser'
+    if (source === 'server') return 'Server'
+    return 'Unknown'
+}
+
+const getSourceColor = (source?: string) => {
+    if (source === 'browser') return 'neutral'
+    return 'error'
 }
 
 const openDrawer = (log: any) => {

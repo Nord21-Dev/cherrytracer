@@ -33,6 +33,7 @@ export const logs = pgTable("logs", {
   projectId: uuid("project_id").references(() => projects.id).notNull(),
   traceId: varchar("trace_id", { length: 64 }),
   spanId: varchar("span_id", { length: 64 }),
+  source: varchar("source", { length: 16 }).notNull().default("server"),
   level: varchar("level", { length: 10 }).notNull(), // 'info', 'error', etc.
   message: text("message"),
   data: jsonb("data"), // Stores headers, payload, user_id
