@@ -1,5 +1,12 @@
 # api
 
+## 0.0.11
+
+### Patch Changes
+
+- e126935: Perf. improv. and bug fixing
+- e126935: Improved performance and switched to Postgres18
+
 ## 0.0.10
 
 ### Patch Changes

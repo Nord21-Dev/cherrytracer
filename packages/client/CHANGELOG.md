@@ -1,5 +1,11 @@
 # cherrytracer
 
+## 0.0.3
+
+### Patch Changes
+
+- e126935: Perf. improv. and bug fixing
+
 ## 0.0.2
 
 ### Patch Changes
