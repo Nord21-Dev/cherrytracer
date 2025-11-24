@@ -184,11 +184,12 @@ export const partitioningService = {
       const rows = await db.execute(sql`
         SELECT
           child.relid::regclass AS name,
-          extract(epoch FROM substring(child.bound FROM 'FROM \\(''([^'']+)''\\)')::timestamptz) * 1000 AS start_ms,
-          extract(epoch FROM substring(child.bound FROM 'TO \\(''([^'']+)''\\)')::timestamptz) * 1000 AS end_ms
+          extract(epoch FROM substring(pg_get_expr(c.relpartbound, c.oid) FROM 'FROM \\(''([^'']+)''\\)')::timestamptz) * 1000 AS start_ms,
+          extract(epoch FROM substring(pg_get_expr(c.relpartbound, c.oid) FROM 'TO \\(''([^'']+)''\\)')::timestamptz) * 1000 AS end_ms
         FROM pg_partition_tree('logs'::regclass) AS child
+        JOIN pg_class c ON c.oid = child.relid
         WHERE child.isleaf = true
-          AND child.bound LIKE 'FOR VALUES FROM%';
+          AND pg_get_expr(c.relpartbound, c.oid) LIKE 'FOR VALUES FROM%';
       `);
 
       return rows
