@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, uuid, index, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb, uuid, index, varchar, uniqueIndex, integer } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 // System Settings (Singleton pattern via primary key)
@@ -37,6 +37,7 @@ export const logs = pgTable("logs", {
   level: varchar("level", { length: 10 }).notNull(), // 'info', 'error', etc.
   message: text("message"),
   data: jsonb("data"), // Stores headers, payload, user_id
+  fingerprint: varchar("fingerprint", { length: 64 }), // Link to log_groups
   timestamp: timestamp("timestamp", { mode: 'date', withTimezone: true }).notNull(),
 }, (table) => [
   // Indices for performance
@@ -50,6 +51,29 @@ export const logs = pgTable("logs", {
 
   // Full Text Search Index for fast message searching
   index("message_search_idx").using("gin", sql`to_tsvector('simple', ${table.message})`),
+
+  // Fingerprint index for grouping
+  index("fingerprint_idx").on(table.fingerprint),
+]);
+
+// Log Groups: Smart Grouping (Hash/Vector)
+export const logGroups = pgTable("log_groups", {
+  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+  projectId: uuid("project_id").references(() => projects.id).notNull(),
+  fingerprint: varchar("fingerprint", { length: 64 }).notNull(), // Hash of the pattern
+  pattern: text("pattern").notNull(), // The "template" of the log message
+  exampleMessage: text("example_message"), // One real example
+  level: varchar("level", { length: 10 }).notNull(),
+  count: integer("count").notNull().default(1),
+  firstSeen: timestamp("first_seen", { mode: 'date', withTimezone: true }).notNull(),
+  lastSeen: timestamp("last_seen", { mode: 'date', withTimezone: true }).notNull(),
+  // Future: embedding vector(1536)
+}, (table) => [
+  index("group_project_idx").on(table.projectId),
+  index("group_fingerprint_idx").on(table.fingerprint),
+  index("group_last_seen_idx").on(table.lastSeen),
+  // Unique constraint for upsert
+  uniqueIndex("group_unique_idx").on(table.projectId, table.fingerprint),
 ]);
 
 export const logsRelations = relations(logs, ({ one }) => ({

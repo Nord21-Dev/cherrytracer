@@ -60,7 +60,6 @@ const coerceHeader = (value: string | string[] | undefined) => {
 
 export const ingestRoutes = new Elysia({ prefix: "/ingest" })
   .post("/", async ({ body, headers, set }) => {
-    console.log(headers);
     const apiKey = coerceHeader(headers["x-api-key"]);
     const headerProjectId = coerceHeader(headers["x-project-id"]);
     const refererHeader = coerceHeader(headers["referer"] || headers["referrer"] || headers["Referer"]);

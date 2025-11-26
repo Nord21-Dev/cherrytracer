@@ -2,7 +2,7 @@
     <UContainer class="py-8 space-y-6">
         <!-- 1. Header & Controls -->
         <div class="flex flex-row md:items-center justify-between gap-4">
-            <div>
+            <div class="flex items-center gap-4">
                 <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Logs</h1>
             </div>
             <div class="flex items-center gap-3">
@@ -24,7 +24,6 @@
             @refresh="refreshLogs"
         />
 
-        <!-- Logs Table -->
         <UCard>
             <template #header>
                 <div class="flex items-center justify-between">
@@ -33,15 +32,11 @@
                         <h3 class="text-sm font-medium text-gray-800 dark:text-neutral-200">Live Logs</h3>
                     </div>
 
-                    <div class="flex gap-1.5">
-                        <div class="size-2.5 rounded-full bg-error-500/20 border border-error-500/50"></div>
-                        <div class="size-2.5 rounded-full bg-warning-500/20 border border-warning-500/50"></div>
-                        <div class="size-2.5 rounded-full bg-info-500/20 border border-info-500/50"></div>
-                    </div>
+                    <UTabs :items="tabItems" v-model="viewMode" :content="false" size="sm"/>
                 </div>
             </template>
-
-            <div v-if="logs.length" class="font-mono text-xs">
+            <LogGroups v-if="viewMode === 'patterns'" :project-id="selectedProjectId || ''" @select="selectPattern" />
+            <div v-else-if="logs.length" class="font-mono text-xs">
                 <div class="custom-scrollbar overflow-x-auto">
                     <table class="w-full min-w-[720px] text-left border-collapse">
                         <thead
@@ -108,14 +103,13 @@
                 </div>
             </div>
 
-            <!-- Empty State -->
-            <div v-else class="p-12 text-center text-gray-500 dark:text-neutral-500">
+            <div v-else-if="viewMode === 'list'" class="p-12 text-center text-gray-500 dark:text-neutral-500">
                 <UIcon name="i-lucide-inbox" class="text-4xl mb-2" />
                 <p>No logs found.</p>
             </div>
 
             <!-- Pagination / Load More -->
-            <div v-if="logs.length > 0"
+            <div v-if="logs.length > 0 && viewMode === 'list'"
                 class="p-3 border-t border-gray-200 dark:border-neutral-800 flex justify-center">
                 <UButton variant="ghost" color="neutral" size="sm" @click="loadMore" :loading="loadingMore">
                     Load older logs
@@ -188,6 +182,21 @@ const loadingMore = ref(false)
 const isDrawerOpen = ref(false)
 const selectedLog = ref<any>(null)
 const isLive = ref(true)
+const viewMode = ref<'list' | 'patterns'>('list')
+
+// Tabs items for view mode
+const tabItems = ref([
+    { label: 'List', value: 'list', icon: 'i-lucide-list' },
+    { label: 'Patterns', value: 'patterns', icon: 'i-lucide-grid' }
+])
+
+const selectPattern = (group: any) => {
+    // Filter by the pattern string
+    // Ideally we'd filter by fingerprint but our search is text-based for now
+    // We can use the pattern itself as a search query
+    filters.search = `"${group.pattern}"` // Quote it to be exact-ish
+    viewMode.value = 'list'
+}
 
 watch(() => newLogsCount.value, (count) => {
     if (isLive.value && count > 0) {

@@ -67,7 +67,7 @@ const app = new Elysia()
         perMessageDeflate: false,
 
         body: t.Object({
-            type: t.String(), 
+            type: t.String(),
             projectId: t.Optional(t.String())
         }),
 
@@ -88,7 +88,7 @@ const app = new Elysia()
 
             if (body.type === 'subscribe' && body.projectId) {
                 const { projectId } = body;
-                
+
                 const projectExists = await db.query.projects.findFirst({
                     where: eq(projects.id, projectId),
                     columns: { id: true }
@@ -121,7 +121,7 @@ if (adminEmail && adminPass) {
     }
 }
 
-const port = 3000;
+const port = process.env.PORT || 3000;
 app.listen({
     port: port,
     hostname: '0.0.0.0'
