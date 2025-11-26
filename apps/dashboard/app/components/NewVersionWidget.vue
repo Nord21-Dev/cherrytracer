@@ -41,6 +41,35 @@ const loading = ref(true)
 const refreshVersion = async () => {
     try {
         const res = await fetchApi<any>('/api/system/version', { skipProject: true })
+        
+        // Helper to clean version string (strip package name and 'v' prefix)
+        const cleanVersion = (v: string) => {
+            if (!v) return '0.0.0'
+            const parts = v.split('@')
+            const last = parts[parts.length - 1] || v
+            return last.replace(/^v/, '')
+        }
+
+        const current = cleanVersion(res.current)
+        const latest = cleanVersion(res.latest)
+
+        // Semver comparison
+        const isNewer = (v1: string, v2: string) => {
+            const p1 = v1.split('.').map(Number)
+            const p2 = v2.split('.').map(Number)
+            for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+                const n1 = p1[i] || 0
+                const n2 = p2[i] || 0
+                if (n1 > n2) return true
+                if (n2 > n1) return false
+            }
+            return false
+        }
+
+        res.current = current
+        res.latest = latest
+        res.update_available = isNewer(latest, current)
+        
         versionInfo.value = res
     } catch (e) {
         // silent fail

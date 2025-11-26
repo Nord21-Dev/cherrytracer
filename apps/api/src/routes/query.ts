@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia";
 import { jwt } from "@elysiajs/jwt";
 import { db } from "../db";
-import { logs, projects } from "../db/schema";
+import { logs, projects, logGroups } from "../db/schema";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 
 export const queryRoutes = new Elysia()
@@ -99,3 +99,25 @@ export const queryRoutes = new Elysia()
             bucket: t.Optional(t.String({ default: 'hour' }))
         })
     })
+    .get("/groups", async ({ query }) => {
+        const { project_id, limit = "50", offset = "0", sort = "last_seen" } = query;
+
+        const orderBy = sort === "count" ? desc(logGroups.count) : desc(logGroups.lastSeen);
+
+        const data = await db.select()
+            .from(logGroups)
+            .where(eq(logGroups.projectId, project_id))
+            .limit(parseInt(limit))
+            .offset(parseInt(offset))
+            .orderBy(orderBy);
+
+        return { data };
+    }, {
+        detail: { tags: ["Query"], summary: "Fetch Log Groups" },
+        query: t.Object({
+            project_id: t.String(),
+            limit: t.Optional(t.String()),
+            offset: t.Optional(t.String()),
+            sort: t.Optional(t.String()) // 'last_seen' | 'count'
+        })
+    });

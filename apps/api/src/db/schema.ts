@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, uuid, index, varchar, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb, uuid, index, varchar, uniqueIndex, integer } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 // System Settings (Singleton pattern via primary key)
@@ -64,6 +64,7 @@ export const logGroups = pgTable("log_groups", {
   pattern: text("pattern").notNull(), // The "template" of the log message
   exampleMessage: text("example_message"), // One real example
   level: varchar("level", { length: 10 }).notNull(),
+  count: integer("count").notNull().default(1),
   firstSeen: timestamp("first_seen", { mode: 'date', withTimezone: true }).notNull(),
   lastSeen: timestamp("last_seen", { mode: 'date', withTimezone: true }).notNull(),
   // Future: embedding vector(1536)

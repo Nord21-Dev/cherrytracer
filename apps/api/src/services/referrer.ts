@@ -99,9 +99,6 @@ export const checkReferrer = (refererHeader: string | undefined, allowedReferrer
     return { allowed: false, reason: "Browser key has no allowed referrers configured" };
   }
 
-  console.log("Allowed referrers:", allowedReferrers);
-  console.log("Referer header:", refererHeader);
-
   if (!refererHeader) {
     return { allowed: false, reason: "Missing Referer header for browser key" };
   }

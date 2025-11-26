@@ -90,8 +90,6 @@ class IngestQueue {
         }
       }
 
-      console.log(`[Queue] Flushing ${processedBatch.length} logs...`);
-
       // 1. Upsert Log Groups
       // We need unique groups per batch to avoid conflicts in the same insert
       const groupsMap = new Map<string, typeof logGroups.$inferInsert>();
@@ -107,6 +105,7 @@ class IngestQueue {
             pattern: log.pattern,
             exampleMessage: log.message?.substring(0, 1000), // Store first example
             level: log.level,
+            count: 1,
             firstSeen: log.timestamp,
             lastSeen: log.timestamp,
           });
@@ -115,6 +114,7 @@ class IngestQueue {
           const g = groupsMap.get(key)!;
           if (log.timestamp > g.lastSeen) g.lastSeen = log.timestamp;
           if (log.timestamp < g.firstSeen) g.firstSeen = log.timestamp;
+          g.count = (g.count || 0) + 1;
         }
       }
 
@@ -126,6 +126,7 @@ class IngestQueue {
             target: [logGroups.projectId, logGroups.fingerprint],
             set: {
               lastSeen: sql`GREATEST(${logGroups.lastSeen}, EXCLUDED.last_seen)`,
+              count: sql`${logGroups.count} + 1`,
               // Optional: Update example message if we want fresh ones, but usually keeping the first is fine
             }
           });
@@ -146,7 +147,6 @@ class IngestQueue {
       console.error("[Queue] ⚠️ Flush failed:", error);
 
       if (this.queue.length + batch.length <= this.MAX_QUEUE_SIZE) {
-        console.log("[Queue] ↩️ Re-queueing failed batch");
         this.queue.unshift(...batch);
       } else {
         console.error("[Queue] ❌ Dropping failed batch (Queue Full)");
