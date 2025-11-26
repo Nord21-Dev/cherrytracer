@@ -1,5 +1,11 @@
 # api
 
+## 0.0.14
+
+### Patch Changes
+
+- 1568b7f: Added smart group hashing
+
 ## 0.0.13
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # dashboard
 
+## 0.0.12
+
+### Patch Changes
+
+- 1568b7f: Added smart group hashing
+
 ## 0.0.11
 
 ### Patch Changes
