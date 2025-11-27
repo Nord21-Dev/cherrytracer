@@ -1,5 +1,11 @@
 # dashboard
 
+## 0.0.16
+
+### Patch Changes
+
+- 162db05: Fixed types and README
+
 ## 0.0.15
 
 ### Patch Changes
