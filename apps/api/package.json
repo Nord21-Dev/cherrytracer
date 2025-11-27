@@ -3,14 +3,16 @@
     "private": true,
     "version": "0.0.15",
     "scripts": {
-        "start": "drizzle-kit push && bun run src/index.ts",
-        "dev": "bun run --watch src/index.ts",
-        "db:generate": "drizzle-kit generate",
-        "db:migrate": "drizzle-kit migrate",
-        "db:push": "drizzle-kit push",
-        "db:studio": "drizzle-kit studio",
-        "seed": "bun scripts/seed.ts"
-    },
+        "start": "bun run src/index.ts",
+    "dev": "bun run --watch src/index.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:drop-logs": "psql \"$DATABASE_URL\" -c \"DO $$ DECLARE r record; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'logs%' LOOP EXECUTE format('DROP TABLE IF EXISTS %I.%I CASCADE', 'public', r.tablename); END LOOP; END $$;\"",
+    "db:drop-log-groups": "psql \"$DATABASE_URL\" -c \"DROP TABLE IF EXISTS public.log_groups CASCADE\"",
+    "seed": "bun scripts/seed.ts"
+  },
     "dependencies": {
         "@elysiajs/cors": "^1.4.0",
         "@elysiajs/cron": "^1.4.1",
