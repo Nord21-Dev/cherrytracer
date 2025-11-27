@@ -1,5 +1,11 @@
 # cherrytracer
 
+## 0.0.4
+
+### Patch Changes
+
+- 5182771: Health check, traces health monitor
+
 ## 0.0.3
 
 ### Patch Changes
