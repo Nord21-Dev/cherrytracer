@@ -1,5 +1,11 @@
 # cherrytracer
 
+## 0.0.5
+
+### Patch Changes
+
+- 500d70a: Added log marker
+
 ## 0.0.4
 
 ### Patch Changes
