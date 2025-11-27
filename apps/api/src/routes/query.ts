@@ -107,13 +107,27 @@ export const queryRoutes = new Elysia()
         })
     })
     .get("/groups", async ({ query }) => {
-        const { project_id, limit = "50", offset = "0", sort = "last_seen" } = query;
+        const {
+            project_id, limit = "50", offset = "0", sort = "last_seen",
+            level, exclude_system_events
+        } = query;
+
+        const conditions = [eq(logGroups.projectId, project_id)];
+
+        if (level) {
+            conditions.push(eq(logGroups.level, level));
+        }
+
+        if (exclude_system_events === 'true') {
+            conditions.push(sql`${logGroups.pattern} NOT LIKE 'Span Started%'`);
+            conditions.push(sql`${logGroups.pattern} NOT LIKE 'Span Ended%'`);
+        }
 
         const orderBy = sort === "count" ? desc(logGroups.count) : desc(logGroups.lastSeen);
 
         const data = await db.select()
             .from(logGroups)
-            .where(eq(logGroups.projectId, project_id))
+            .where(and(...conditions))
             .limit(parseInt(limit))
             .offset(parseInt(offset))
             .orderBy(orderBy);
@@ -125,6 +139,8 @@ export const queryRoutes = new Elysia()
             project_id: t.String(),
             limit: t.Optional(t.String()),
             offset: t.Optional(t.String()),
-            sort: t.Optional(t.String()) // 'last_seen' | 'count'
+            sort: t.Optional(t.String()), // 'last_seen' | 'count'
+            level: t.Optional(t.String()),
+            exclude_system_events: t.Optional(t.String())
         })
     });

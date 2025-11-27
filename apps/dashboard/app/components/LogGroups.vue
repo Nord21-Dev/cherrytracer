@@ -1,43 +1,51 @@
 <template>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <UCard v-for="group in groups" :key="group.id"
-            class="group cursor-pointer hover:ring-2 hover:ring-primary-500/50 transition-all duration-200"
-            @click="$emit('select', group)">
-            
-            <div class="flex justify-between items-start mb-3">
-                <UBadge :color="getLevelColor(group.level)" variant="subtle" size="xs" class="uppercase font-bold">
-                    {{ group.level }}
-                </UBadge>
-                <div class="text-xs text-neutral-500 font-mono">
-                    {{ formatTime(group.lastSeen) }}
-                </div>
-            </div>
+    <div class="space-y-4">
+        <!-- Severity Tabs -->
+        <div class="flex justify-center">
+            <UTabs :items="severityTabs" v-model="selectedSeverity" :content="false" size="xs" />
+        </div>
 
-            <div class="mb-4">
-                <h4 class="text-sm font-medium text-neutral-900 dark:text-white line-clamp-2 font-mono break-all"
-                    :title="group.pattern">
-                    {{ group.pattern }}
-                </h4>
-                <p class="text-xs text-neutral-500 mt-1 line-clamp-1 opacity-75">
-                    {{ group.exampleMessage }}
-                </p>
-            </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <UCard v-for="group in groups" :key="group.id"
+                class="group cursor-pointer hover:ring-2 hover:ring-primary-500/50 transition-all duration-200"
+                @click="$emit('select', group)">
 
-            <div class="flex items-end justify-between mt-auto pt-2 border-t border-neutral-100 dark:border-neutral-800">
-                <div class="flex flex-col">
-                    <span class="text-[10px] uppercase text-neutral-400 font-bold tracking-wider">Count</span>
-                    <span class="text-lg font-bold text-neutral-900 dark:text-white">{{ formatCount(group.count) }}</span>
-                </div>
-                
-                <!-- Simple visual indicator of 'heat' based on count -->
-                <div class="flex gap-0.5 items-end h-6">
-                    <div v-for="i in 5" :key="i"
-                        class="w-1 h-1 rounded-full transition-all duration-500"
-                        :class="getBarClass(i, group.count)">
+                <div class="flex justify-between items-start mb-3">
+                    <UBadge :color="getLevelColor(group.level)" variant="subtle" size="xs" class="uppercase font-bold">
+                        {{ group.level }}
+                    </UBadge>
+                    <div class="text-xs text-neutral-500 font-mono">
+                        {{ formatTime(group.lastSeen) }}
                     </div>
                 </div>
-            </div>
-        </UCard>
+
+                <div class="mb-4">
+                    <h4 class="text-sm font-medium text-neutral-900 dark:text-white line-clamp-2 font-mono break-all"
+                        :title="group.pattern">
+                        {{ group.pattern }}
+                    </h4>
+                    <p class="text-xs text-neutral-500 mt-1 line-clamp-1 opacity-75">
+                        {{ group.exampleMessage }}
+                    </p>
+                </div>
+
+                <div
+                    class="flex items-end justify-between mt-auto pt-2 border-t border-neutral-100 dark:border-neutral-800">
+                    <div class="flex flex-col">
+                        <span class="text-[10px] uppercase text-neutral-400 font-bold tracking-wider">Count</span>
+                        <span class="text-lg font-bold text-neutral-900 dark:text-white">{{ formatCount(group.count)
+                            }}</span>
+                    </div>
+
+                    <!-- Simple visual indicator of 'heat' based on count -->
+                    <div class="flex gap-0.5 items-end h-6">
+                        <div v-for="i in 5" :key="i" class="w-1 h-1 rounded-full transition-all duration-500"
+                            :class="getBarClass(i, group.count)">
+                        </div>
+                    </div>
+                </div>
+            </UCard>
+        </div>
     </div>
 </template>
 
@@ -52,13 +60,25 @@ defineEmits(['select'])
 
 const { fetchApi } = useCherryApi()
 const groups = ref<any[]>([])
+const selectedSeverity = ref('error') // Index of the tab
+
+const severityTabs = [
+    { label: 'All', value: 'all' },
+    { label: 'Errors', value: 'error' },
+    { label: 'Warnings', value: 'warn' },
+    { label: 'Info', value: 'info' }
+]
 
 const fetchGroups = async () => {
+    const level = selectedSeverity.value === 'all' ? undefined : selectedSeverity.value;
+
     const res = await fetchApi<{ data: any[] }>('/api/groups', {
         params: {
             project_id: props.projectId,
             limit: 50,
-            sort: 'last_seen'
+            sort: 'last_seen',
+            level,
+            exclude_system_events: 'true'
         }
     })
     if (res?.data) {
@@ -73,6 +93,11 @@ await fetchGroups()
 useIntervalFn(() => {
     fetchGroups()
 }, 5000)
+
+// Watch for tab changes
+watch(selectedSeverity, () => {
+    fetchGroups()
+})
 
 // Helpers
 const getLevelColor = (level: string) => {
