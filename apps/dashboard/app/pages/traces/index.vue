@@ -25,7 +25,7 @@
                 v-for="(group, name) in groupedSpans"
                 :key="name"
                 :ui="{ body: 'p-0 sm:p-0' }"
-                class="overflow-hidden hover:ring-2 hover:ring-neutral-500/20 transition-all cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+                class="overflow-hidden hover:ring-2 hover:ring-neutral-500/20 transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
                 role="button"
                 tabindex="0"
                 @click="openSpanDetails(name, group)"
@@ -136,7 +136,7 @@
                                 </p>
                             </div>
                             <div class="flex flex-col items-end gap-2">
-                                <UBadge size="xs" variant="soft" :color="levelBadgeColor(sample.level)">
+                <UBadge size="xs" variant="soft" :color="levelBadgeColor[sample.level]">
                                     {{ sample.level }}
                                 </UBadge>
                                 <UButton size="xs" variant="ghost" color="neutral" label="Open" @click="navigateToTrace(sample.traceId)" />

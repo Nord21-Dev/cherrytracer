@@ -81,6 +81,8 @@ child.end({ status: "success" });
 parent.end();
 ```
 
+The span helper exposes `.id`, so reuse that value when passing `parentSpanId` to child spans; `spanId` only appears on the emitted log entries.
+
 - `traceId` keeps every span in the same trace. Omitting it generates a new trace ID, so the span becomes another root bucket.
 - `parentSpanId` records the parent/child relationship. If you only pass `traceId`, the backend can’t reconstruct a tree and the UI shows the span as another root. Passing both guarantees a proper nested child with accurate timing.
 - `attributes` lets you attach static metadata (merged into every start/end log) such as operation names, environment tags, or correlation IDs.
