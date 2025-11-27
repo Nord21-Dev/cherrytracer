@@ -79,7 +79,7 @@ export const statsRoutes = new Elysia({ prefix: "/stats" })
         `);
 
         const stats = kpis[0] as { total_requests: number; total_errors: number; active_traces: number };
-        const errorRate = stats.total_requests > 0 
+        const errorRate = stats.total_requests > 0
             ? ((stats.total_errors / stats.total_requests) * 100).toFixed(2)
             : "0.00";
 
@@ -91,6 +91,55 @@ export const statsRoutes = new Elysia({ prefix: "/stats" })
             },
             offenders
         };
+    }, {
+        query: t.Object({
+            project_id: t.String(),
+            period: t.Optional(t.String())
+        })
+    })
+    .get("/spans", async ({ query }) => {
+        const { project_id, period = "24h" } = query;
+
+        let interval = "1 hour";
+        let lookback = "24 hours";
+
+        if (period === '1h') {
+            interval = "5 minutes";
+            lookback = "1 hour";
+        } else if (period === '7d') {
+            interval = "4 hours";
+            lookback = "7 days";
+        }
+
+        let bucketExpr = sql`date_trunc('hour', timestamp)`;
+
+        if (interval === "5 minutes") {
+            bucketExpr = sql`date_trunc('hour', timestamp) + floor(extract(minute from timestamp) / 5)::int * interval '5 minutes'`;
+        } else if (interval === "4 hours") {
+            bucketExpr = sql`date_trunc('day', timestamp) + floor(extract(hour from timestamp) / 4)::int * interval '4 hours'`;
+        }
+
+        const spanNameExpr = sql`COALESCE(data->>'span_name', substring(message from 'Processed (.*)'))`;
+        const statusExpr = sql`COALESCE(data->>'status', 'success')`;
+
+        // Postgres SQL to aggregate span data
+        const spans = await db.execute(sql`
+            SELECT 
+                ${bucketExpr} as time_bucket,
+                ${spanNameExpr} as span_name,
+                AVG((data->>'duration_ms')::numeric)::int as avg_latency,
+                COUNT(*)::int as throughput,
+                COUNT(CASE WHEN ${statusExpr} = 'error' THEN 1 END)::int as error_count,
+                COUNT(CASE WHEN ${statusExpr} != 'error' THEN 1 END)::int as success_count
+            FROM ${logs}
+            WHERE project_id = ${project_id}
+            AND data->>'span_event' = 'end'
+            AND timestamp > NOW() - INTERVAL '${sql.raw(lookback)}'
+            GROUP BY 1, 2
+            ORDER BY 1 ASC
+        `);
+
+        return { data: spans };
     }, {
         query: t.Object({
             project_id: t.String(),

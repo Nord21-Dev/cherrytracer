@@ -43,9 +43,11 @@
                     Latency</div>
                 <div class="flex items-baseline gap-1">
                     <span class="text-xl font-mono font-bold text-primary-500 tracking-tighter">
-                        {{ pending ? '---' : totalDuration.toFixed(2) }}
+                            {{ pending ? '---' : formattedTotalDuration.value }}
                     </span>
-                    <span class="text-sm text-gray-500 dark:text-neutral-500 font-medium">ms</span>
+                        <span class="text-sm text-gray-500 dark:text-neutral-500 font-medium">
+                            {{ formattedTotalDuration.unit }}
+                        </span>
                 </div>
             </div>
         </section>
@@ -167,7 +169,7 @@
 
                             <!-- The Bar -->
                             <div class="flex-1 relative h-6 flex items-center">
-                                <UTooltip :text="`${span.duration.toFixed(2)}ms — ${span.name}`"
+                                <UTooltip :text="`${formatLatencyLabel(span.duration)} — ${span.name}`"
                                     :popper="{ placement: 'top' }">
                                     <div class="absolute h-2.5 rounded-full min-w-1 transition-all duration-300 group-hover:h-3.5 group-hover:shadow-[0_0_15px_rgba(var(--color-primary-500),0.2)] cursor-crosshair"
                                         :class="[
@@ -184,7 +186,7 @@
                                 <span
                                     class="absolute text-[10px] font-mono text-gray-600 dark:text-neutral-600 ml-2 pointer-events-none transition-all opacity-0 group-hover:opacity-100"
                                     :style="{ left: `calc(${span.offsetPercent + span.widthPercent}% + 8px)` }">
-                                    {{ span.duration.toFixed(2) }}ms
+                                    {{ formatLatencyLabel(span.duration) }}
                                 </span>
                             </div>
                         </div>
@@ -275,6 +277,43 @@ const traceId = route.params.id as string
 const toast = useToast()
 const { fetchApi } = useCherryApi()
 const { selectedProjectId } = useProject()
+
+const DURATION_UNITS = [
+    { label: 'd', divisor: 86_400_000 },
+    { label: 'h', divisor: 3_600_000 },
+    { label: 'min', divisor: 60_000 },
+    { label: 's', divisor: 1_000 },
+    { label: 'ms', divisor: 1 }
+] as const
+
+const DEFAULT_DURATION_UNIT = DURATION_UNITS[DURATION_UNITS.length - 1]!
+
+const resolveDurationUnit = (absMs: number): (typeof DURATION_UNITS)[number] => {
+    for (const entry of DURATION_UNITS) {
+        if (absMs >= entry.divisor) {
+            return entry
+        }
+    }
+
+    return DEFAULT_DURATION_UNIT
+}
+
+const formatLatency = (ms: number) => {
+    const absMs = Math.abs(ms)
+    const unit = resolveDurationUnit(absMs)
+    const normalized = ms / unit.divisor
+    const decimals = Math.abs(normalized) >= 10 ? 0 : 2
+
+    return {
+        value: normalized.toFixed(decimals),
+        unit: unit.label
+    }
+}
+
+const formatLatencyLabel = (ms: number) => {
+    const { value, unit } = formatLatency(ms)
+    return `${value}${unit}`
+}
 
 // --- Types ---
 interface LogEntry {
@@ -395,6 +434,8 @@ const totalDuration = computed(() => {
 
     return Math.max(end - start, 1) // Ensure at least 1ms to prevent div by zero
 })
+
+const formattedTotalDuration = computed(() => formatLatency(totalDuration.value))
 
 // 3. Update offsets to be relative to the Global Trace Start
 const preparedSpans = computed(() => {

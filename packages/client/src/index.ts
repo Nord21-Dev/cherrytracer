@@ -109,6 +109,7 @@ export class CherryTracer {
           ...data,
           duration_ms: duration,
           span_event: 'end',
+          span_name: name,
           status: 'success' // Default to success, user can override in data
         }, traceId, spanId);
       }
