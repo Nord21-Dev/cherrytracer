@@ -1,5 +1,11 @@
 # api
 
+## 0.0.15
+
+### Patch Changes
+
+- 5182771: Health check, traces health monitor
+
 ## 0.0.14
 
 ### Patch Changes

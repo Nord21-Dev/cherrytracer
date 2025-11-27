@@ -1,5 +1,11 @@
 # dashboard
 
+## 0.0.13
+
+### Patch Changes
+
+- 5182771: Health check, traces health monitor
+
 ## 0.0.12
 
 ### Patch Changes
