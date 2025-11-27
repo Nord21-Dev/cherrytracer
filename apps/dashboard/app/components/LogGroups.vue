@@ -80,7 +80,7 @@ const getLevelColor = (level: string) => {
         case 'error': return 'error'
         case 'warn': return 'warning'
         case 'debug': return 'info'
-        default: return 'primary'
+        default: return 'neutral'
     }
 }
 
