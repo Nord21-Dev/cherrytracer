@@ -35,7 +35,7 @@
                     </div>
                 </div>
                 
-                <div class="h-[80px] w-full bg-gray-50/50 dark:bg-neutral-900/50">
+                <div class="h-20 w-full bg-gray-50/50 dark:bg-neutral-900/50">
                     <VizTraceSparkline :data="group.history" />
                 </div>
             </UCard>

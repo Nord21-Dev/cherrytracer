@@ -19,9 +19,17 @@ export interface LogEvent {
   timestamp?: string; // ISO string
 }
 
+export interface StartSpanOptions {
+  traceId?: string;
+  parentSpanId?: string;
+  attributes?: Record<string, any>;
+}
+
 export interface Span {
   id: string;
   traceId: string;
+  name: string;
+  parentSpanId?: string;
   end: (data?: Record<string, any>) => void;
   info: (message: string, data?: any) => void;
   error: (message: string, data?: any) => void;

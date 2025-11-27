@@ -1,5 +1,13 @@
-import { CherryConfig, LogEvent, LogLevel, Span } from "./types";
+import { CherryConfig, LogEvent, LogLevel, Span, StartSpanOptions } from "./types";
 import { generateId, getContext } from "./utils";
+
+const monotonicNow = () => {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+
+  return Date.now();
+};
 
 export class CherryTracer {
   private queue: LogEvent[] = [];
@@ -87,30 +95,62 @@ export class CherryTracer {
    * Trace / Spans
    * Returns an object that allows logging *within* that span context
    */
-  public startSpan(name: string, parentTraceId?: string): Span {
-    const traceId = parentTraceId || generateId();
-    const spanId = generateId();
-    const startTime = Date.now();
+  public startSpan(name: string, traceIdOrOptions?: string | StartSpanOptions): Span {
+    const options: StartSpanOptions = typeof traceIdOrOptions === "string"
+      ? { traceId: traceIdOrOptions }
+      : (traceIdOrOptions || {});
 
-    // We no longer log "Span Started" to reduce noise.
-    // The canonical log line will be emitted at the end.
+    const traceId = options.traceId || generateId();
+    const spanId = generateId();
+    const parentSpanId = options.parentSpanId;
+    const startMonotonic = monotonicNow();
+    const startWallClock = new Date().toISOString();
+    let spanStatus: "success" | "error" = "success";
+    let ended = false;
+
+    // Emit explicit START event for visibility into in-flight spans
+    this.emit("info", `Started ${name}`, {
+      ...options.attributes,
+      span_event: "start",
+      span_name: name,
+      status: "in_progress",
+      span_id: spanId,
+      trace_id: traceId,
+      parent_span_id: parentSpanId,
+      started_at: startWallClock
+    }, traceId, spanId);
 
     return {
       id: spanId,
       traceId: traceId,
+      name,
+      parentSpanId,
 
       info: (msg, data) => this.emit("info", msg, data, traceId, spanId),
-      error: (msg, data) => this.emit("error", msg, data, traceId, spanId),
+      error: (msg, data) => {
+        spanStatus = "error";
+        this.emit("error", msg, data, traceId, spanId);
+      },
 
       end: (data?: any) => {
-        const duration = Date.now() - startTime;
+        if (ended) return;
+        ended = true;
+
+        const duration = Math.max(0, Math.round(monotonicNow() - startMonotonic));
+        const status = data?.status || spanStatus || "success";
+
         // Canonical Log Line
         this.emit("info", `Processed ${name}`, {
+          ...options.attributes,
           ...data,
           duration_ms: duration,
           span_event: 'end',
           span_name: name,
-          status: 'success' // Default to success, user can override in data
+          status,
+          span_id: spanId,
+          trace_id: traceId,
+          parent_span_id: parentSpanId,
+          started_at: startWallClock
         }, traceId, spanId);
       }
     };
@@ -185,3 +225,5 @@ export class CherryTracer {
     }
   }
 }
+
+export type { CherryConfig, LogEvent, LogLevel, Span, StartSpanOptions };

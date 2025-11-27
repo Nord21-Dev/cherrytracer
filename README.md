@@ -170,6 +170,17 @@ try {
 }
 ```
 
+- Every span emits a `start` event immediately and an `end` event with `duration_ms`, `span_event`, `span_name`, `trace_id`, `span_id`, optional `parent_span_id`, and `status` (`success`/`error`). The SDK uses a monotonic clock for duration so wall-clock jumps don't skew results.
+- For nested spans, pass the parent identifiers to keep the tree intact:
+
+```typescript
+const parent = cherry.startSpan("checkout_flow");
+const child = cherry.startSpan("payment_gateway", { traceId: parent.traceId, parentSpanId: parent.id });
+// ...
+child.end();
+parent.end();
+```
+
 ### 4. Advanced Control
 The SDK handles batching automatically, but you can force a flush (e.g., before serverless function timeout).
 

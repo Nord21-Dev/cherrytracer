@@ -24,7 +24,7 @@ export class Simulator {
       span.info("Calculating tax...", { region: "US-CA" });
       await this.sleep(50);
 
-      const pSpan = this.logger.startSpan("payment_gateway", span.traceId);
+      const pSpan = this.logger.startSpan("payment_gateway", { traceId: span.traceId, parentSpanId: span.id });
       pSpan.info("Contacting Stripe API");
       await this.sleep(300);
       pSpan.end({ status: "captured", amount: 9900 });
@@ -46,7 +46,7 @@ export class Simulator {
       await this.sleep(150);
 
       // Simulate nested failure
-      const pSpan = this.logger.startSpan("payment_gateway", span.traceId);
+      const pSpan = this.logger.startSpan("payment_gateway", { traceId: span.traceId, parentSpanId: span.id });
       await this.sleep(200);
       const errorMsg = ERRORS[Math.floor(Math.random() * ERRORS.length)];
       pSpan.error("Payment Provider Error", { code: "ERR_402", provider_msg: errorMsg });
@@ -70,6 +70,15 @@ export class Simulator {
     }
 
     span.end({ count });
+  }
+
+  // 4. Long-running / unfinished span (no end)
+  async danglingSpan() {
+    const span = this.logger.startSpan("long_running_job");
+
+    await this.sleep(250);
+    span.info("Still running...", { phase: "processing" });
+    // Intentionally do NOT call span.end() to simulate an in-flight span
   }
 
   toggleAutoPilot(enabled: boolean) {

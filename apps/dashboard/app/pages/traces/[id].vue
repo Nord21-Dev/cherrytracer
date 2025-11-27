@@ -155,12 +155,13 @@
                             <div class="w-1/4 min-w-[120px] pr-1 flex flex-col truncate  mr-4">
                                 <div class="flex items-center gap-2">
                                     <div class="size-1.5 rounded-full shadow-[0_0_8px_currentColor]"
-                                        :class="span.error ? 'bg-red-500 text-red-500' : 'bg-emerald-500 text-emerald-500'">
+                                        :class="span.active ? 'bg-amber-400 text-amber-400' : span.error ? 'bg-red-500 text-red-500' : 'bg-emerald-500 text-emerald-500'">
                                     </div>
                                     <span
                                         class="text-xs font-medium text-gray-700 dark:text-neutral-300 truncate group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
                                         {{ span.name }}
                                     </span>
+                                    <UBadge v-if="span.active" variant="soft" color="warning" size="xs">In Flight</UBadge>
                                 </div>
                                 <span class="text-[10px] font-mono text-gray-600 dark:text-neutral-600 pl-3.5">{{
                                     span.id.slice(0,
@@ -169,13 +170,15 @@
 
                             <!-- The Bar -->
                             <div class="flex-1 relative h-6 flex items-center">
-                                <UTooltip :text="`${formatLatencyLabel(span.duration)} — ${span.name}`"
+                                <UTooltip :text="`${formatLatencyLabel(span.duration)} — ${span.name}${span.active ? ' (in-flight)' : ''}`"
                                     :popper="{ placement: 'top' }">
                                     <div class="absolute h-2.5 rounded-full min-w-1 transition-all duration-300 group-hover:h-3.5 group-hover:shadow-[0_0_15px_rgba(var(--color-primary-500),0.2)] cursor-crosshair"
                                         :class="[
-                                            span.error
-                                                ? 'bg-red-500/80 border border-red-500'
-                                                : 'bg-gray-300 dark:bg-neutral-700 border border-gray-400 dark:border-neutral-600 group-hover:bg-primary-500 group-hover:border-primary-400'
+                                            span.active
+                                                ? 'bg-amber-200 dark:bg-amber-500/40 border border-amber-300 dark:border-amber-400 animate-pulse'
+                                                : span.error
+                                                    ? 'bg-red-500/80 border border-red-500'
+                                                    : 'bg-gray-300 dark:bg-neutral-700 border border-gray-400 dark:border-neutral-600 group-hover:bg-primary-500 group-hover:border-primary-400'
                                         ]" :style="{
                                                 left: `${span.offsetPercent}%`,
                                                 width: `${span.widthPercent}%`
@@ -186,7 +189,7 @@
                                 <span
                                     class="absolute text-[10px] font-mono text-gray-600 dark:text-neutral-600 ml-2 pointer-events-none transition-all opacity-0 group-hover:opacity-100"
                                     :style="{ left: `calc(${span.offsetPercent + span.widthPercent}% + 8px)` }">
-                                    {{ formatLatencyLabel(span.duration) }}
+                                    {{ span.active ? `${formatLatencyLabel(span.duration)} (live)` : formatLatencyLabel(span.duration) }}
                                 </span>
                             </div>
                         </div>
@@ -326,6 +329,13 @@ interface LogEntry {
     data?: Record<string, any>
 }
 
+const extractDurationMs = (log: LogEntry): number | null => {
+    const raw = (log.data as any)?.duration_ms ?? (log.data as any)?.durationMs ?? (log.data as any)?.duration
+    const value = typeof raw === 'string' ? Number(raw) : raw
+
+    return Number.isFinite(value) ? value : null
+}
+
 // --- Data Fetching ---
 const { data: response, status, refresh } = await useAsyncData(
     `trace-${traceId}`,
@@ -346,6 +356,8 @@ const logs = computed(() => {
     )
 })
 
+const now = ref(Date.now())
+
 // --- Span Processing Logic ---
 const spans = computed(() => {
     const raw = logs.value
@@ -357,11 +369,13 @@ const spans = computed(() => {
         if (!spanMap.has(log.spanId)) {
             spanMap.set(log.spanId, {
                 id: log.spanId,
-                start: null,
-                end: null,
+                start: null as number | null,
+                end: null as number | null,
+                lastSeen: null as number | null,
                 logs: [],
                 error: false,
-                name: 'Unknown Operation'
+                name: 'Unknown Operation',
+                hasEndEvent: false
             })
         }
 
@@ -369,43 +383,61 @@ const spans = computed(() => {
         entry.logs.push(log)
 
         const ts = new Date(log.timestamp).getTime()
+        entry.lastSeen = entry.lastSeen === null ? ts : Math.max(entry.lastSeen, ts)
+        const durationMs = extractDurationMs(log)
+        const isStartEvent = log.data?.span_event === 'start'
+        const isEndEvent = log.data?.span_event === 'end'
 
-        // Heuristic: Logic to determine Start Time
-        // 1. Explicit 'start' event in data
-        // 2. Or it's the first log we've seen for this span
-        if (log.data?.span_event === 'start' || !entry.start || ts < entry.start) {
-            entry.start = ts
-
-            // Try to extract a better name from message
-            // Convention: "Started: <Name>"
-            if (log.message.includes('Started:')) {
-                const parts = log.message.split('Started:')
-                if (parts[1]) {
-                    entry.name = parts[1].trim()
-                }
-            } else if (log.data?.span_name) {
-                entry.name = log.data.span_name
-            } else if (entry.name === 'Unknown Operation') {
-                // Fallback to just the message if it's a start event
-                entry.name = log.message
+        // Prefer explicit span name hints if available
+        if (log.message.includes('Started:')) {
+            const parts = log.message.split('Started:')
+            if (parts[1]) {
+                entry.name = parts[1].trim()
             }
+        } else if (log.data?.span_name) {
+            entry.name = log.data.span_name
+        } else if (entry.name === 'Unknown Operation') {
+            entry.name = log.message
         }
 
-        // Heuristic: Logic to determine End Time
-        if (log.data?.span_event === 'end' || !entry.end || ts > entry.end) {
-            entry.end = ts
+        // Heuristic: determine start/end
+        if (isStartEvent) {
+            entry.start = entry.start === null ? ts : Math.min(entry.start, ts)
         }
+
+        if (isEndEvent) {
+            entry.end = entry.end === null ? ts : Math.max(entry.end, ts)
+            entry.hasEndEvent = true
+        }
+
+        // If we only have an end event but the producer sent duration_ms, backfill the start.
+        if (isEndEvent && durationMs !== null) {
+            const inferredStart = ts - durationMs
+            entry.start = entry.start === null ? inferredStart : Math.min(entry.start, inferredStart)
+        }
+
+        // Fallback: use observed timestamp bounds if no explicit markers
+        entry.start = entry.start === null ? ts : Math.min(entry.start, ts)
 
         if (log.level === 'error') entry.error = true
     })
 
     // Convert Map to Array and calculate duration
     return Array.from(spanMap.values())
-        .filter(s => s.start && s.end) // Only show complete spans
-        .map((s: any) => ({
-            ...s,
-            duration: (s.end - s.start) || 1 // Avoid 0ms div by zero issues
-        }))
+        .filter(s => s.start) // Show spans even if no end event (in-flight)
+        .map((s: any) => {
+            const effectiveEnd = s.hasEndEvent
+                ? s.end
+                : now.value
+
+            return {
+                ...s,
+                end: s.end ?? s.lastSeen ?? s.start,
+                duration: Math.max((effectiveEnd - s.start), 1), // Avoid 0ms div by zero issues
+                active: !s.hasEndEvent,
+                effectiveEnd
+            }
+        })
         .sort((a, b) => a.start - b.start)
 })
 
@@ -428,7 +460,7 @@ const totalDuration = computed(() => {
 
     const start = traceStart.value
     const lastLogTime = new Date(logs.value[logs.value.length - 1]?.timestamp || start).getTime()
-    const lastSpanEnd = spans.value.length ? Math.max(...spans.value.map(s => s.end)) : 0
+    const lastSpanEnd = spans.value.length ? Math.max(...spans.value.map(s => s.effectiveEnd || s.end || 0)) : 0
 
     const end = Math.max(lastLogTime, lastSpanEnd)
 
@@ -454,6 +486,27 @@ const preparedSpans = computed(() => {
         }
     })
 })
+
+const hasActiveSpans = computed(() => spans.value.some(s => s.active))
+
+if (process.client) {
+    let nowTimer: any = null
+
+    watch(hasActiveSpans, (active) => {
+        if (active && !nowTimer) {
+            nowTimer = setInterval(() => {
+                now.value = Date.now()
+            }, 1000)
+        } else if (!active && nowTimer) {
+            clearInterval(nowTimer)
+            nowTimer = null
+        }
+    }, { immediate: true })
+
+    onBeforeUnmount(() => {
+        if (nowTimer) clearInterval(nowTimer)
+    })
+}
 
 // --- Utilities ---
 const formatTime = (ts: string) => format(new Date(ts), 'HH:mm:ss.SSS')
