@@ -1,5 +1,11 @@
 # cherrytracer
 
+## 0.0.7
+
+### Patch Changes
+
+- 162db05: Fixed types and README
+
 ## 0.0.6
 
 ### Patch Changes
