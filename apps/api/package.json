@@ -1,7 +1,7 @@
 {
     "name": "api",
     "private": true,
-    "version": "0.0.16",
+    "version": "0.0.17",
     "scripts": {
         "start": "bun run src/index.ts",
         "dev": "bun run --watch src/index.ts",
