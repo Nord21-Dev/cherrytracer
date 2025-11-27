@@ -1,5 +1,11 @@
 # api
 
+## 0.0.17
+
+### Patch Changes
+
+- 500d70a: Added log marker
+
 ## 0.0.16
 
 ### Patch Changes
