@@ -92,8 +92,8 @@ export class CherryTracer {
     const spanId = generateId();
     const startTime = Date.now();
 
-    // Log the start
-    this.emit("info", `Span Started: ${name}`, { span_event: 'start' }, traceId, spanId);
+    // We no longer log "Span Started" to reduce noise.
+    // The canonical log line will be emitted at the end.
 
     return {
       id: spanId,
@@ -104,10 +104,13 @@ export class CherryTracer {
 
       end: (data?: any) => {
         const duration = Date.now() - startTime;
-        this.emit("info", `Span Ended: ${name}`, {
+        // Canonical Log Line
+        this.emit("info", `Processed ${name}`, {
           ...data,
           duration_ms: duration,
-          span_event: 'end'
+          span_event: 'end',
+          span_name: name,
+          status: 'success' // Default to success, user can override in data
         }, traceId, spanId);
       }
     };

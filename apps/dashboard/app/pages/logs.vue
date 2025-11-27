@@ -3,36 +3,30 @@
         <!-- 1. Header & Controls -->
         <div class="flex flex-row md:items-center justify-between gap-4">
             <div class="flex items-center gap-4">
-                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Logs</h1>
+                <h1 class="text-2xl font-bold text-neutral-900 dark:text-white">Logs</h1>
             </div>
             <div class="flex items-center gap-3">
+                <USwitch v-model="showSystemEvents" label="Raw Events" />
                 <UBadge v-if="!isLive && newLogsCount > 0" color="primary" variant="solid" size="xs"
                     class="rounded-full">
                     {{ newLogsCount }}
                 </UBadge>
-                <div class="flex items-center gap-2">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Live data</span>
-                    <USwitch v-model="isLive" />
-                </div>
+                <USwitch v-model="isLive" label="Live" color="success" />
             </div>
         </div>
 
         <!-- Filters Toolbar -->
-        <FilterBar
-            v-model:search="filters.search"
-            v-model:filters="filters.structured"
-            @refresh="refreshLogs"
-        />
+        <FilterBar v-model:search="filters.search" v-model:filters="filters.structured" @refresh="refreshLogs" />
 
         <UCard>
             <template #header>
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <UIcon name="i-lucide-terminal" class="text-neutral-500 dark:text-neutral-500" />
-                        <h3 class="text-sm font-medium text-gray-800 dark:text-neutral-200">Live Logs</h3>
+                        <h3 class="text-sm font-medium text-neutral-800 dark:text-neutral-200">Live Logs</h3>
                     </div>
 
-                    <UTabs :items="tabItems" v-model="viewMode" :content="false" size="sm"/>
+                    <UTabs :items="tabItems" v-model="viewMode" :content="false" size="sm" />
                 </div>
             </template>
             <LogGroups v-if="viewMode === 'patterns'" :project-id="selectedProjectId || ''" @select="selectPattern" />
@@ -40,62 +34,61 @@
                 <div class="custom-scrollbar overflow-x-auto">
                     <table class="w-full min-w-[720px] text-left border-collapse">
                         <thead
-                            class="bg-gray-50/50 dark:bg-white/2 text-gray-500 dark:text-neutral-500 sticky top-0 z-10 backdrop-blur-sm">
+                            class="bg-neutral-50/50 dark:bg-white/2 text-neutral-500 dark:text-neutral-500 sticky top-0 z-10 backdrop-blur-sm">
                             <tr>
                                 <th
-                                    class="px-4 py-2 font-medium w-40 border-b border-gray-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest text-left">
+                                    class="px-4 py-2 font-medium w-40 border-b border-neutral-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest text-left">
                                     Timestamp</th>
                                 <th
-                                    class="px-4 py-2 font-medium w-24 border-b border-gray-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
+                                    class="py-2 font-medium w-24 border-b border-neutral-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
                                     Level</th>
                                 <th
-                                    class="px-4 py-2 font-medium w-28 border-b border-gray-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
+                                    class="py-2 font-medium w-28 border-b border-neutral-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
                                     Source</th>
                                 <th
-                                    class="px-4 py-2 font-medium border-b border-gray-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
+                                    class="py-2 font-medium border-b border-neutral-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
                                     Message</th>
                                 <th
-                                    class="px-4 py-2 font-medium w-36 border-b border-gray-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
+                                    class="py-2 font-medium w-36 border-b border-neutral-200 dark:border-neutral-800 text-[10px] uppercase tracking-widest">
                                     Trace</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-200 dark:divide-neutral-800/50">
+                        <tbody class="divide-y divide-neutral-200 dark:divide-neutral-800/50">
                             <tr v-for="log in logs" :key="log.id"
-                                class="group hover:bg-gray-100/30 dark:hover:bg-white/3 transition-colors cursor-pointer"
+                                class="group hover:bg-neutral-100/30 dark:hover:bg-white/3 transition-colors cursor-pointer relative"
                                 @click="openDrawer(log)">
                                 <td
-                                    class="px-4 py-2 text-gray-500 dark:text-neutral-500 whitespace-nowrap group-hover:text-gray-700 dark:group-hover:text-neutral-300">
+                                    class="py-1 px-1 text-neutral-500 dark:text-neutral-500 whitespace-nowrap group-hover:text-neutral-700 dark:group-hover:text-neutral-300">
                                     {{ formatTime(log.timestamp) }}
                                 </td>
-                                <td class="px-4 py-2">
+                                <td class="">
                                     <UBadge :color="getLevelColor(log.level)" variant="subtle" size="xs"
                                         class="uppercase tracking-wider font-bold scale-90 origin-left">
                                         {{ log.level }}
                                     </UBadge>
                                 </td>
-                                <td class="px-4 py-2">
+                                <td class="">
                                     <UBadge :color="getSourceColor(log.source)" variant="subtle" size="xs"
                                         class="uppercase tracking-wider font-semibold scale-90 origin-left">
                                         {{ formatSource(log.source) }}
                                     </UBadge>
                                 </td>
-                                <td class="px-4 py-2 text-gray-700 dark:text-neutral-300">
+                                <td class=" text-neutral-700 dark:text-neutral-300">
                                     <p
-                                        class="text-xs font-mono text-gray-900 dark:text-neutral-100 opacity-90 group-hover:opacity-100 break-all">
+                                        class="text-xs font-mono text-neutral-900 dark:text-neutral-100 opacity-90 group-hover:opacity-100 break-all">
                                         {{ log.message }}
                                     </p>
-                                    <div v-if="log.data && Object.keys(log.data).length"
+                                    <!-- <div v-if="log.data && Object.keys(log.data).length"
                                         class="mt-1 text-[10px] opacity-50">
                                         {{ JSON.stringify(log.data) }}
-                                    </div>
+                                    </div> -->
                                 </td>
-                                <td class="px-4 py-2">
-                                    <UButton v-if="log.traceId" :to="`/traces/${log.traceId}`" variant="ghost"
-                                        color="primary" size="xs" @click.stop
-                                        class="font-mono px-2 py-1 text-[11px] hover:bg-primary-500/10">
-                                        View Trace
+                                <td class="py-1 flex justify-start items-center gap-2">
+                                    <UButton v-if="log.traceId" :to="`/traces/${log.traceId}`" variant="soft"
+                                    icon="i-lucide-audio-waveform"
+                                        color="neutral" size="xs" @click.stop>
+                                        Trace
                                     </UButton>
-                                    <span v-else class="text-gray-400 dark:text-neutral-600 tracking-widest">—</span>
                                 </td>
                             </tr>
                         </tbody>
@@ -103,14 +96,14 @@
                 </div>
             </div>
 
-            <div v-else-if="viewMode === 'list'" class="p-12 text-center text-gray-500 dark:text-neutral-500">
+            <div v-else-if="viewMode === 'list'" class="p-12 text-center text-neutral-500 dark:text-neutral-500">
                 <UIcon name="i-lucide-inbox" class="text-4xl mb-2" />
                 <p>No logs found.</p>
             </div>
 
             <!-- Pagination / Load More -->
             <div v-if="logs.length > 0 && viewMode === 'list'"
-                class="p-3 border-t border-gray-200 dark:border-neutral-800 flex justify-center">
+                class="p-3 border-t border-neutral-200 dark:border-neutral-800 flex justify-center">
                 <UButton variant="ghost" color="neutral" size="sm" @click="loadMore" :loading="loadingMore">
                     Load older logs
                 </UButton>
@@ -122,41 +115,44 @@
             <template #body>
                 <div v-if="selectedLog" class="space-y-6 flex-1 overflow-y-auto">
                     <div>
-                        <label class="text-xs text-gray-500 dark:text-neutral-500 uppercase font-bold">Message</label>
-                        <div class="mt-1 text-gray-900 dark:text-neutral-200">{{ selectedLog.message }}</div>
+                        <label
+                            class="text-xs text-neutral-500 dark:text-neutral-500 uppercase font-bold">Message</label>
+                        <div class="mt-1 text-neutral-900 dark:text-neutral-200">{{ selectedLog.message }}</div>
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="text-xs text-gray-500 dark:text-neutral-500 uppercase font-bold">Level</label>
+                            <label
+                                class="text-xs text-neutral-500 dark:text-neutral-500 uppercase font-bold">Level</label>
                             <div class="mt-1 uppercase">{{ selectedLog.level }}</div>
                         </div>
                         <div>
-                            <label class="text-xs text-gray-500 dark:text-neutral-500 uppercase font-bold">Source</label>
+                            <label
+                                class="text-xs text-neutral-500 dark:text-neutral-500 uppercase font-bold">Source</label>
                             <div class="mt-1 uppercase">{{ formatSource(selectedLog.source) }}</div>
                         </div>
                         <div>
                             <label
-                                class="text-xs text-gray-500 dark:text-neutral-500 uppercase font-bold">Timestamp</label>
+                                class="text-xs text-neutral-500 dark:text-neutral-500 uppercase font-bold">Timestamp</label>
                             <div class="mt-1 font-mono text-sm">{{ selectedLog.timestamp }}</div>
                         </div>
                         <div>
-                            <label class="text-xs text-gray-500 dark:text-neutral-500 uppercase font-bold">Trace
+                            <label class="text-xs text-neutral-500 dark:text-neutral-500 uppercase font-bold">Trace
                                 ID</label>
                             <div class="mt-1 font-mono text-sm">{{ selectedLog.traceId || 'N/A' }}</div>
                         </div>
                         <div>
-                            <label class="text-xs text-gray-500 dark:text-neutral-500 uppercase font-bold">Span
+                            <label class="text-xs text-neutral-500 dark:text-neutral-500 uppercase font-bold">Span
                                 ID</label>
                             <div class="mt-1 font-mono text-sm">{{ selectedLog.spanId || 'N/A' }}</div>
                         </div>
                     </div>
 
                     <div>
-                        <label class="text-xs text-gray-500 dark:text-neutral-500 uppercase font-bold">Payload
+                        <label class="text-xs text-neutral-500 dark:text-neutral-500 uppercase font-bold">Payload
                             Data</label>
                         <div
-                            class="mt-2 bg-gray-50 dark:bg-neutral-900 p-4 rounded border border-gray-200 dark:border-neutral-800 text-xs font-mono overflow-x-auto">
+                            class="mt-2 bg-neutral-50 dark:bg-neutral-900 p-4 rounded border border-neutral-200 dark:border-neutral-800 text-xs font-mono overflow-x-auto">
                             <VueJsonPretty :data="selectedLog.data" :deep="2" :theme="jsonTheme" />
                         </div>
                     </div>
@@ -182,6 +178,7 @@ const loadingMore = ref(false)
 const isDrawerOpen = ref(false)
 const selectedLog = ref<any>(null)
 const isLive = ref(true)
+const showSystemEvents = ref(false)
 const viewMode = ref<'list' | 'patterns'>('list')
 
 // Tabs items for view mode
@@ -246,10 +243,11 @@ const { data: initialData, pending, refresh } = await useAsyncData('logs',
             offset: 0,
             search: filters.search,
             level: filters.level,
-            filters: JSON.stringify(filters.structured)
+            filters: JSON.stringify(filters.structured),
+            exclude_system_events: (!showSystemEvents.value).toString()
         }
     }),
-    { watch: [filters], server: false }
+    { watch: [filters, showSystemEvents], server: false }
 )
 
 watch(initialData, (newVal) => {
@@ -276,7 +274,8 @@ const loadMore = async () => {
             offset: nextOffset,
             search: filters.search,
             level: filters.level,
-            filters: JSON.stringify(filters.structured)
+            filters: JSON.stringify(filters.structured),
+            exclude_system_events: (!showSystemEvents.value).toString()
         }
     })
     if (res?.data) {
@@ -294,7 +293,7 @@ const getLevelColor = (level: string) => {
         case 'error': return 'error'
         case 'warn': return 'warning'
         case 'debug': return 'info'
-        default: return 'primary'
+        default: return 'neutral'
     }
 }
 
