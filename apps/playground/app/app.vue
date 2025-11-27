@@ -45,6 +45,11 @@
                             <span>Failed Payment</span>
                             <span class="meta">Trace + Error</span>
                         </button>
+
+                        <button @click="sim.danglingSpan()" class="btn" data-tooltip="Starts a span without ending it to simulate in-flight work">
+                            <span>In-Flight Span (no end)</span>
+                            <span class="meta">Trace + open span</span>
+                        </button>
                     </div>
                 </div>
 

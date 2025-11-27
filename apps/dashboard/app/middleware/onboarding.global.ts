@@ -2,9 +2,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
     const { user } = useAuth()
     
     // Only run checks if we are logged in
+    console.log("Onboarding Middleware: User", user.value)
     if (user.value) {
         const { projects, isLoading } = useProject()
-        
+        console.log("Onboarding Middleware: ", { projects: projects.value, isLoading: isLoading.value, to: to.path })
+
         // We might need to wait for hydration if projects are empty but loading
         if (isLoading.value) return 
 

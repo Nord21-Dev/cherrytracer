@@ -34,8 +34,8 @@ export const queryRoutes = new Elysia()
         const conditions = [eq(logs.projectId, project_id)];
 
         if (exclude_system_events === 'true') {
-            conditions.push(sql`${logs.message} NOT LIKE 'Span Started%'`);
-            conditions.push(sql`${logs.message} NOT LIKE 'Span Ended%'`);
+            // Hide tracer-emitted span lifecycle events by default
+            conditions.push(sql`${logs.data}->>'span_event' IS NULL`);
         }
 
         if (level) conditions.push(eq(logs.level, level));
@@ -119,8 +119,13 @@ export const queryRoutes = new Elysia()
         }
 
         if (exclude_system_events === 'true') {
-            conditions.push(sql`${logGroups.pattern} NOT LIKE 'Span Started%'`);
-            conditions.push(sql`${logGroups.pattern} NOT LIKE 'Span Ended%'`);
+            // Hide groups whose source logs are tracer lifecycle events
+            conditions.push(sql`NOT EXISTS (
+                SELECT 1 FROM ${logs}
+                WHERE ${logs.projectId} = ${logGroups.projectId}
+                  AND ${logs.fingerprint} = ${logGroups.fingerprint}
+                  AND ${logs.data}->>'span_event' IS NOT NULL
+            )`);
         }
 
         const orderBy = sort === "count" ? desc(logGroups.count) : desc(logGroups.lastSeen);
