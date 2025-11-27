@@ -1,5 +1,11 @@
 # api
 
+## 0.0.16
+
+### Patch Changes
+
+- 99c7e4f: auto migration turned off
+
 ## 0.0.15
 
 ### Patch Changes
