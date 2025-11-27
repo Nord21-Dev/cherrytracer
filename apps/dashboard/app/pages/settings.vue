@@ -230,7 +230,7 @@
             <template #body>
                 <div class="space-y-4">
                     <p class="text-sm text-neutral-600 dark:text-neutral-400">
-                        Updating CherryTracer on PaaS platforms like Coolify, Railway, or any other service supporting
+                        Updating Cherrytracer on PaaS platforms like Coolify, Railway, or any other service supporting
                         Docker Compose is straightforward and safe.
                     </p>
                     <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">

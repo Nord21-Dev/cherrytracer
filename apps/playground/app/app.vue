@@ -118,7 +118,7 @@
 </template>
 
 <script setup lang="ts">
-import { CherryTracer } from 'cherrytracer'
+import { Cherrytracer } from 'cherrytracer'
 import { Simulator } from './utils/simulator'
 
 const API_BASE = 'http://localhost:3000'
@@ -145,7 +145,7 @@ const createId = () =>
 const init = () => {
     if (!config.browserApiKey) return
 
-    const logger = new CherryTracer({
+    const logger = new Cherrytracer({
         apiKey: config.browserApiKey,
         projectId: config.projectId,
         baseUrl: API_BASE,
