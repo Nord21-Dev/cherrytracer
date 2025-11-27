@@ -1,5 +1,11 @@
 # dashboard
 
+## 0.0.17
+
+### Patch Changes
+
+- 4863670: Improved traces & sparkline UI
+
 ## 0.0.16
 
 ### Patch Changes
