@@ -178,8 +178,6 @@
 
                             <!-- The Bar -->
                             <div class="flex-1 relative h-8 flex items-center">
-                                <UTooltip :text="spanTooltip(span)"
-                                    :popper="{ placement: 'top' }">
                                     <div class="absolute h-3 rounded-full min-w-1 transition-all duration-300 group-hover:shadow-[0_0_15px_rgba(var(--color-primary-500),0.2)] overflow-visible"
                                         :class="[
                                             span.active
@@ -219,7 +217,6 @@
                                             </div>
                                         </div>
                                     </div>
-                                </UTooltip>
 
                                 <!-- Duration Label (Right of bar) -->
                                 <div class="absolute flex items-center gap-2"
@@ -339,6 +336,7 @@ const DEFAULT_DURATION_UNIT = DURATION_UNITS[DURATION_UNITS.length - 1]!
 const LOG_MARKER_COLLAPSE_THRESHOLD = 120
 const MAX_MARKERS_PER_SPAN = 180
 const MIN_TRACE_ID_LENGTH = 8
+const ACTIVE_POLL_INTERVAL_MS = 3_000
 
 const LEVEL_PRIORITY: Record<LogEntry['level'], number> = {
     error: 3,
@@ -789,20 +787,52 @@ const hasActiveSpans = computed(() => spans.value.some(s => s.active))
 
 if (process.client) {
     let nowTimer: any = null
+    let pollTimer: any = null
 
-    watch(hasActiveSpans, (active) => {
-        if (active && !nowTimer) {
-            nowTimer = setInterval(() => {
-                now.value = Date.now()
-            }, 1000)
-        } else if (!active && nowTimer) {
+    const stopNowTimer = () => {
+        if (nowTimer) {
             clearInterval(nowTimer)
             nowTimer = null
+        }
+    }
+
+    const stopPollTimer = () => {
+        if (pollTimer) {
+            clearInterval(pollTimer)
+            pollTimer = null
+        }
+    }
+
+    const maybeRefreshTrace = async () => {
+        if (status.value === 'pending') return
+
+        try {
+            await refresh()
+        } catch (error) {
+            console.error('Failed to refresh trace data', error)
+        }
+    }
+
+    watch(hasActiveSpans, (active) => {
+        if (active) {
+            if (!nowTimer) {
+                nowTimer = setInterval(() => {
+                    now.value = Date.now()
+                }, 1000)
+            }
+
+            if (!pollTimer) {
+                pollTimer = setInterval(maybeRefreshTrace, ACTIVE_POLL_INTERVAL_MS)
+            }
+        } else {
+            stopNowTimer()
+            stopPollTimer()
         }
     }, { immediate: true })
 
     onBeforeUnmount(() => {
-        if (nowTimer) clearInterval(nowTimer)
+        stopNowTimer()
+        stopPollTimer()
     })
 }
 

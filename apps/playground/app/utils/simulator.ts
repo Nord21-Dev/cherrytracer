@@ -1,14 +1,14 @@
-import { CherryTracer } from "cherrytracer"; // Assuming workspace link
+import { Cherrytracer } from "cherrytracer"; // Assuming workspace link
 
 const PRODUCTS = ["Premium Plan", "Credits Pack", "Enterprise Seat"];
 const ERRORS = ["Card Declined", "Gateway Timeout", "Insufficient Funds"];
 
 export class Simulator {
-  private logger: CherryTracer;
+  private logger: Cherrytracer;
   private isRunning = false;
   private timer: any = null;
 
-  constructor(logger: CherryTracer) {
+  constructor(logger: Cherrytracer) {
     this.logger = logger;
   }
 

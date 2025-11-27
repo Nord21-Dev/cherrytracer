@@ -103,91 +103,44 @@ Cherrytracer is built to be "One-Click" compatible.
 
 ---
 
-## 📦 The Client SDK
+## 📦 Client SDK
 
-Our universal SDK works in **Node.js**, **Bun**, and the **Browser**. It is <2KB, type-safe, and uses "Smart Batching" to ensure it never slows down your app.
+Our tiny universal SDK works in **Node.js**, **Bun**, and the **Browser**. It batches logs intelligently, tags them with auto-derived context, and ships them to your Cherrytracer project without risking performance.
 
-### Installation
+### Highlights
 
-```bash
-npm install cherrytracer
-```
+* Lightweight & type-safe (<2KB once bundled).
+* Runs in browsers (with referer validation) and server runtimes, auto-detecting `NODE_ENV`, hostname, URL, and user agent.
+* Queues logs, flushes on timers/tabs becoming hidden, and retries failed batches with exponential backoff.
+* Supports structured logging, spans (`traceId` + `parentSpanId`), attributes, and manual `flush` calls for sensitive flows.
 
-### 1. Initialize
-Initialize the tracer once at the start of your application.
+For a production-ready guide, configuration table, and tracing deep dive, see `packages/client/README.md`.
+
+### Quick snippet
 
 ```typescript
 import { CherryTracer } from "cherrytracer";
 
-const cherry = new CherryTracer({
-  apiKey: "ct_...",           // Required: Your API Key
-  projectId: "my-saas-v1",    // Required: Group logs by project
-  baseUrl: "https://...",     // Optional: Your self-hosted instance URL
-  
-  // ⚡️ Performance Tuning (Optional)
-  enabled: true,              // Toggle globally (great for dev/prod environments)
-  batchSize: 50,              // Flush after 50 logs...
-  flushInterval: 2000,        // ...or every 2 seconds
-});
-```
-
-### 2. Logging
-Structured logging that just works. Pass any object as the second argument.
-
-```typescript
-cherry.info("User signed up", { 
-  userId: "u_123", 
-  plan: "pro", 
-  source: "landing_page" 
+const tracer = new CherryTracer({
+  apiKey: "ct_...",
+  projectId: "your-project-id",
+  keyType: "browser" // optional: inferred automatically
 });
 
-cherry.error("Payment failed", { 
-  reason: "card_declined", 
-  amount: 9900 
-});
+tracer.info("App booted", { release: "v1.2.1" });
+
+const span = tracer.startSpan("checkout_flow");
+span.info("Started", { cartItems: 4 });
+span.end({ status: "success" });
 ```
 
-### 3. Tracing (Performance Monitoring)
-Measure how long things take with **Spans**. Spans automatically track duration and group related logs together.
+Every log inherits the base context and is stamped with `traceId`, `spanId`, and a fingerprint so the dashboard can group, filter, and visualize traces without additional plumbing.
 
-```typescript
-const span = cherry.startSpan("process_order");
+If you need to correlate logs manually, pass `traceId` (same trace) and `parentSpanId` (keeps the parent/child tree) when starting nested spans; the SDK uses a monotonic clock so `duration_ms` stays reliable even if the system clock jumps.
 
-try {
-  // You can log *inside* the span to keep context
-  span.info("Validating cart items");
-  await validateCart();
-  
-  span.info("Charging card");
-  await chargeCard();
+### Advanced control
 
-  // End the span to record the duration
-  span.end({ success: true, orderId: "o_789" });
-} catch (e) {
-  // Mark the span as errored
-  span.error("Order processing failed", { error: e.message });
-  span.end({ success: false });
-}
-```
-
-- Every span emits a `start` event immediately and an `end` event with `duration_ms`, `span_event`, `span_name`, `trace_id`, `span_id`, optional `parent_span_id`, and `status` (`success`/`error`). The SDK uses a monotonic clock for duration so wall-clock jumps don't skew results.
-- For nested spans, pass the parent identifiers to keep the tree intact:
-
-```typescript
-const parent = cherry.startSpan("checkout_flow");
-const child = cherry.startSpan("payment_gateway", { traceId: parent.traceId, parentSpanId: parent.id });
-// ...
-child.end();
-parent.end();
-```
-
-### 4. Advanced Control
-The SDK handles batching automatically, but you can force a flush (e.g., before serverless function timeout).
-
-```typescript
-// Force immediate upload of all queued logs
-await cherry.flush();
-```
+Manual `flush()` lets you force an immediate upload (suitable for `beforeunload` or serverless timeouts), while `enabled: false` can disable instrumentation during tests or sensitive operations. The SDK automatically retries failed requests and warns you if a server key is accidentally used in the browser.
 
 ---
 

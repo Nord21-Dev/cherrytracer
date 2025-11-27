@@ -1,11 +1,11 @@
-import { CherryTracer } from 'cherrytracer'
+import { Cherrytracer } from 'cherrytracer'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
 
   // For the playground, we instantiate a new tracer per request to allow changing keys/projects dynamically.
   // In a real app, you would likely use a singleton or a request-scoped instance from a plugin.
-  const logger = new CherryTracer({
+  const logger = new Cherrytracer({
     apiKey: body.apiKey,
     baseUrl: 'http://localhost:3000',
     projectId: body.projectId || 'server-side-playground'

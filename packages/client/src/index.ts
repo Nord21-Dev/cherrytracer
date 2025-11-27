@@ -9,7 +9,7 @@ const monotonicNow = () => {
   return Date.now();
 };
 
-export class CherryTracer {
+export class Cherrytracer {
   private queue: LogEvent[] = [];
   private config: Required<CherryConfig>;
   private flushTimer: any = null;
@@ -36,7 +36,7 @@ export class CherryTracer {
     };
 
     if (runtime === "browser" && (keyType !== "browser" || !this.config.apiKey.startsWith("ct_pub_"))) {
-      console.warn("[CherryTracer] Browser environment detected. Use a browser key restricted to allowed referrers.");
+      console.warn("[Cherrytracer] Browser environment detected. Use a browser key restricted to allowed referrers.");
     }
 
     this.baseContext = getContext();
