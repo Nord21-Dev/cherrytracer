@@ -119,9 +119,9 @@ For a production-ready guide, configuration table, and tracing deep dive, see `p
 ### Quick snippet
 
 ```typescript
-import { CherryTracer } from "cherrytracer";
+import { Cherrytracer } from "cherrytracer";
 
-const tracer = new CherryTracer({
+const tracer = new Cherrytracer({
   apiKey: "ct_...",
   projectId: "your-project-id",
   keyType: "browser" // optional: inferred automatically
@@ -133,6 +133,8 @@ const span = tracer.startSpan("checkout_flow");
 span.info("Started", { cartItems: 4 });
 span.end({ status: "success" });
 ```
+
+The returned span helper exposes `.id`, so use `parentSpanId: span.id` when spawning child spans.
 
 Every log inherits the base context and is stamped with `traceId`, `spanId`, and a fingerprint so the dashboard can group, filter, and visualize traces without additional plumbing.
 

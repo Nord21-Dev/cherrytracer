@@ -780,12 +780,8 @@ const preparedSpans = computed(() => {
             logMarkers,
             showLogMarkers
         }
-    }, { immediate: true })
-
-    onBeforeUnmount(() => {
-        if (nowTimer) clearInterval(nowTimer)
     })
-}
+})
 
 onBeforeUnmount(() => {
     if (highlightTimer) clearTimeout(highlightTimer)
