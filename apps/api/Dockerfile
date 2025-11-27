@@ -33,6 +33,12 @@ ARG APP_VERSION=0.0.1
 ENV APP_VERSION=$APP_VERSION
 ENV LOG_PARTITIONING_ENABLED=true
 ENV LOG_PARTITIONING_AUTOCONVERT=true
+
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
 # --- END CHANGE ---
 
 # Copy everything from builder (node_modules + source)
