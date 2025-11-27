@@ -1,5 +1,11 @@
 # api
 
+## 0.0.18
+
+### Patch Changes
+
+- 0dd54b8: Added log marker
+
 ## 0.0.17
 
 ### Patch Changes

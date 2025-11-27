@@ -1,5 +1,12 @@
 # cherrytracer
 
+## 0.0.6
+
+### Patch Changes
+
+- 0dd54b8: Added log marker
+- 0dd54b8: Improved trace details
+
 ## 0.0.5
 
 ### Patch Changes
