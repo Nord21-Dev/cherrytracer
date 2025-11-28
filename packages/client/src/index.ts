@@ -1,5 +1,9 @@
 import { CherryConfig, LogEvent, LogLevel, Span, StartSpanOptions } from "./types";
 import { generateId, getContext } from "./utils";
+import { createContextManager, type ContextManager } from "./context";
+import { scrubSensitiveData } from "./scrubber";
+import { instrumentFetch } from "./instrumentation";
+import { setupErrorCapture } from "./error-capture";
 
 const monotonicNow = () => {
   if (typeof performance !== "undefined" && typeof performance.now === "function") {
@@ -20,7 +24,7 @@ export class Cherrytracer {
   private readonly BASE_RETRY_DELAY = 500;
   private readonly MAX_RETRY_DELAY = 10000;
 
-  private storage: any = null; // AsyncLocalStorage<Span>
+  private storage: ContextManager;
 
   constructor(config: CherryConfig) {
     const runtime = typeof window !== "undefined" ? "browser" : "server";
@@ -34,24 +38,22 @@ export class Cherrytracer {
       flushInterval: config.flushInterval || 2000,
       batchSize: config.batchSize || 50,
       enabled: config.enabled ?? true,
-      keyType
+      keyType,
+      // God Mode defaults
+      autoInstrument: config.autoInstrument ?? true,
+      scrubSensitiveData: config.scrubSensitiveData ?? true,
+      sensitiveKeys: config.sensitiveKeys || [],
+      propagateTraceContext: config.propagateTraceContext ?? true,
+      captureErrors: config.captureErrors ?? true,
+      exitDelayMs: config.exitDelayMs ?? 100,
     };
 
     if (runtime === "browser" && (keyType !== "browser" || !this.config.apiKey.startsWith("ct_pub_"))) {
       console.warn("[Cherrytracer] Browser environment detected. Use a browser key restricted to allowed referrers.");
     }
 
-    // Initialize AsyncLocalStorage only in Node/Bun environments
-    if (typeof window === "undefined") {
-      try {
-        // Dynamic require to avoid bundling issues in browser
-        // @ts-ignore
-        const { AsyncLocalStorage } = require("node:async_hooks");
-        this.storage = new AsyncLocalStorage();
-      } catch (e) {
-        // Ignore if not available
-      }
-    }
+    // Initialize universal context manager
+    this.storage = createContextManager();
 
     this.baseContext = getContext();
 
@@ -66,6 +68,19 @@ export class Cherrytracer {
 
     // Start the flush timer
     this.startTimer();
+
+    // GOD MODE: Auto-instrument fetch if enabled
+    if (this.config.autoInstrument) {
+      instrumentFetch(this);
+    }
+
+    // RED BUTTON: Auto-capture uncaught errors if enabled
+    if (this.config.captureErrors) {
+      setupErrorCapture(this, {
+        enabled: this.config.captureErrors,
+        exitDelayMs: this.config.exitDelayMs,
+      });
+    }
   }
 
   private startTimer() {
@@ -76,9 +91,24 @@ export class Cherrytracer {
 
   /**
    * Add a log to the queue
+   * Automatically inherits context from active span if not explicitly provided
    */
   private emit(level: LogLevel, message: string, data: any = {}, traceId?: string, spanId?: string) {
     if (!this.config.enabled) return;
+
+    // GOD MODE: Auto-inject active span context if not explicitly provided
+    if (!traceId && this.storage.isAvailable()) {
+      const activeSpan = this.storage.getStore();
+      if (activeSpan) {
+        traceId = activeSpan.traceId;
+        spanId = activeSpan.id;
+      }
+    }
+
+    // GOD MODE: Auto-scrub sensitive data if enabled
+    const scrubbedData = this.config.scrubSensitiveData
+      ? scrubSensitiveData({ ...this.baseContext, ...data }, this.config.sensitiveKeys)
+      : { ...this.baseContext, ...data };
 
     const entry: LogEvent = {
       level,
@@ -86,10 +116,7 @@ export class Cherrytracer {
       traceId,
       spanId,
       timestamp: new Date().toISOString(),
-      data: {
-        ...this.baseContext,
-        ...data,
-      },
+      data: scrubbedData,
     };
 
     this.queue.push(entry);
@@ -115,7 +142,7 @@ export class Cherrytracer {
       : (traceIdOrOptions || {});
 
     // Auto-inherit context from storage if available and not explicitly provided
-    if (this.storage) {
+    if (this.storage.isAvailable()) {
       const parentSpan = this.storage.getStore();
       if (parentSpan) {
         if (!options.traceId) options.traceId = parentSpan.traceId;
@@ -213,11 +240,8 @@ export class Cherrytracer {
       }
     };
 
-    if (this.storage) {
-      return this.storage.run(span, runWithSpan);
-    }
-
-    return runWithSpan();
+    // Always use context manager (it handles no-op gracefully)
+    return this.storage.run(span, runWithSpan);
   }
 
   /**
@@ -291,3 +315,5 @@ export class Cherrytracer {
 }
 
 export type { CherryConfig, LogEvent, LogLevel, Span, StartSpanOptions };
+export type { ContextManager } from "./context";
+
