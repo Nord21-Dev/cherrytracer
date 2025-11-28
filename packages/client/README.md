@@ -163,6 +163,18 @@ In your dashboard, you'll see:
 - Any errors that occurred
 - A trace header was sent to SendGrid!
 
+### 4. 🚨 Red Button Error Hook
+
+**The Problem:** Crashes and uncaught errors can slip through before you ever get a chance to log them. Browser page crashes, `unhandledRejection`s, or Node `uncaughtException`s can go unnoticed.
+
+**The Solution:** Cherrytracer automatically installs the Red Button Error Hook that listens for browser `window.onerror`/`onunhandledrejection` and Node `uncaughtException`/`unhandledRejection`. When one of these fires it:
+- Deduplicates the error so you don't spam the dashboard.
+- Annotates it with location, origin/promise info, and the constructor name.
+- Flushes the log immediately (sendBeacon/keepalive in browsers, sync flush + optional exit delay in Node).
+- Respects existing handlers in **passive** mode so you can safely layer it on top of other instrumentation.
+
+You can still keep your normal try/catch logging, but now crashes bubble straight into Cherrytracer even when nothing catches them.
+
 ### Error Handling
 
 ```typescript
@@ -185,6 +197,8 @@ app.get("/api/payment/:id", async (req, res) => {
 
 The error log is automatically linked to the request trace!
 
+⚠️ In addition to the manual span example above, Cherrytracer's Red Button Error Hook sits in the background (unless `captureErrors` is disabled). It captures any browser `onerror`/`onunhandledrejection` or Node `uncaughtException`/`unhandledRejection`, deduplicates the exception, enriches it with metadata, flushes the bundle immediately, and—when running in Node—holds the process for `exitDelayMs` before `process.exit(1)` so the trace actually reaches the dashboard. Switch to `captureErrors: "passive"` to keep your own global handlers fully in control while still benefiting from the hook when nothing else catches the crash.
+
 ## 🛠️ API Reference
 
 ### Initialize
@@ -205,6 +219,8 @@ const tracer = new Cherrytracer({
   scrubSensitiveData?: boolean;// Default: true (redact passwords etc.)
   propagateTraceContext?: boolean; // Default: true (inject trace headers)
   sensitiveKeys?: string[];    // Custom keys to scrub
+  captureErrors?: boolean | "passive"; // Default: true (Red Button Error Hook)
+  exitDelayMs?: number;        // Default: 100 (Node only, delay before process.exit)
 });
 ```
 
@@ -329,6 +345,22 @@ const tracer = new Cherrytracer({
   projectId: "test",
   enabled: process.env.NODE_ENV !== "test",
 });
+
+### Control the Red Button Hook
+
+```typescript
+const tracer = new Cherrytracer({
+  apiKey: "ct_test_...",
+  projectId: "test",
+  captureErrors: "passive", // respects existing global handlers
+});
+
+const tracerWithoutHook = new Cherrytracer({
+  apiKey: "ct_test_...",
+  projectId: "test",
+  captureErrors: false,      // never installs the hook
+});
+```
 ```
 
 ### Custom Sensitive Keys
