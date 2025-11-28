@@ -1,5 +1,11 @@
 # cherrytracer
 
+## 0.0.11
+
+### Patch Changes
+
+- 6beaaab: Added error hook
+
 ## 0.0.10
 
 ### Patch Changes
