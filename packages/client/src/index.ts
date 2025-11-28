@@ -20,6 +20,8 @@ export class Cherrytracer {
   private readonly BASE_RETRY_DELAY = 500;
   private readonly MAX_RETRY_DELAY = 10000;
 
+  private storage: any = null; // AsyncLocalStorage<Span>
+
   constructor(config: CherryConfig) {
     const runtime = typeof window !== "undefined" ? "browser" : "server";
     const defaultBaseUrl = config.baseUrl || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
@@ -37,6 +39,17 @@ export class Cherrytracer {
 
     if (runtime === "browser" && (keyType !== "browser" || !this.config.apiKey.startsWith("ct_pub_"))) {
       console.warn("[Cherrytracer] Browser environment detected. Use a browser key restricted to allowed referrers.");
+    }
+
+    // Initialize AsyncLocalStorage only in Node/Bun environments
+    if (typeof window === "undefined") {
+      try {
+        // Dynamic require to avoid bundling issues in browser
+        const { AsyncLocalStorage } = require("node:async_hooks");
+        this.storage = new AsyncLocalStorage();
+      } catch (e) {
+        // Ignore if not available
+      }
     }
 
     this.baseContext = getContext();
@@ -100,6 +113,15 @@ export class Cherrytracer {
       ? { traceId: traceIdOrOptions }
       : (traceIdOrOptions || {});
 
+    // Auto-inherit context from storage if available and not explicitly provided
+    if (this.storage) {
+      const parentSpan = this.storage.getStore();
+      if (parentSpan) {
+        if (!options.traceId) options.traceId = parentSpan.traceId;
+        if (!options.parentSpanId) options.parentSpanId = parentSpan.id;
+      }
+    }
+
     const traceId = options.traceId || generateId();
     const spanId = generateId();
     const parentSpanId = options.parentSpanId;
@@ -154,6 +176,47 @@ export class Cherrytracer {
         }, traceId, spanId);
       }
     };
+  }
+
+  /**
+   * Wraps a callback in a span, automatically handling context propagation.
+   * The span is automatically ended when the callback finishes (or promise resolves).
+   */
+  public trace<T>(name: string, fn: (span: Span) => T, options?: StartSpanOptions): T {
+    const span = this.startSpan(name, options);
+
+    const runWithSpan = () => {
+      try {
+        const result = fn(span);
+
+        if (result && typeof (result as any).then === 'function') {
+          return (result as any).then(
+            (val: any) => {
+              span.end();
+              return val;
+            },
+            (err: any) => {
+              span.error(err instanceof Error ? err.message : String(err));
+              span.end();
+              throw err;
+            }
+          );
+        }
+
+        span.end();
+        return result;
+      } catch (e) {
+        span.error(e instanceof Error ? e.message : String(e));
+        span.end();
+        throw e;
+      }
+    };
+
+    if (this.storage) {
+      return this.storage.run(span, runWithSpan);
+    }
+
+    return runWithSpan();
   }
 
   /**

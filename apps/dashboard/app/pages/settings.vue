@@ -223,6 +223,31 @@
                     </form>
                 </UCard>
             </div>
+
+            <!-- Security Section -->
+            <div class="my-8">
+                <h2 class="text-lg font-semibold mb-4">Security</h2>
+                <UCard class="bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
+                    <form @submit.prevent="changePassword" class="space-y-4 p-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <UFormField label="Current Password" required>
+                                <UInput v-model="passwordForm.currentPassword" type="password" icon="i-lucide-lock" />
+                            </UFormField>
+                            <UFormField label="New Password" required>
+                                <UInput v-model="passwordForm.newPassword" type="password" icon="i-lucide-key" />
+                            </UFormField>
+                            <UFormField label="Confirm New Password" required>
+                                <UInput v-model="passwordForm.confirmPassword" type="password" icon="i-lucide-key" />
+                            </UFormField>
+                        </div>
+                        <div class="flex justify-end">
+                            <UButton type="submit" :loading="changingPassword" color="neutral" variant="subtle">
+                                Change Password
+                            </UButton>
+                        </div>
+                    </form>
+                </UCard>
+            </div>
         </div>
 
         <!-- Help Modal -->
@@ -400,6 +425,44 @@ const storageForm = reactive({
 })
 const savingStorage = ref(false)
 const { fetchApi } = useCherryApi()
+
+// Password Change Logic
+const passwordForm = reactive({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+})
+const changingPassword = ref(false)
+
+const changePassword = async () => {
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+        toast.add({ title: 'Error', description: 'New passwords do not match', color: 'error' })
+        return
+    }
+
+    changingPassword.value = true
+    try {
+        await fetchApi('/api/auth/password', {
+            method: 'PUT',
+            body: {
+                currentPassword: passwordForm.currentPassword,
+                newPassword: passwordForm.newPassword
+            },
+            skipProject: true
+        })
+        toast.add({ title: 'Success', description: 'Password changed successfully', color: 'success' })
+        passwordForm.currentPassword = ''
+        passwordForm.newPassword = ''
+        passwordForm.confirmPassword = ''
+    } catch (e: any) {
+        // The fetchApi wrapper might throw an error with a message property or we might need to parse it
+        // Assuming fetchApi throws an error object that might contain the response data or message
+        const msg = e.data?.error || e.message || 'Failed to change password'
+        toast.add({ title: 'Error', description: msg, color: 'error' })
+    } finally {
+        changingPassword.value = false
+    }
+}
 
 // Load initial data
 const loadStorage = async () => {

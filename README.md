@@ -107,6 +107,8 @@ Cherrytracer is built to be "One-Click" compatible.
 
 Our tiny universal SDK works in **Node.js**, **Bun**, and the **Browser**. It batches logs intelligently, tags them with auto-derived context, and ships them to your Cherrytracer project without risking performance.
 
+Open `packages/client/README.md` for full docs.
+
 ### Highlights
 
 * Lightweight & type-safe (<2KB once bundled).
