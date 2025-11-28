@@ -1,5 +1,11 @@
 # cherrytracer
 
+## 0.0.8
+
+### Patch Changes
+
+- fbfb58c: Auto context injection
+
 ## 0.0.7
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # api
 
+## 0.0.19
+
+### Patch Changes
+
+- fbfb58c: Auto context injection
+
 ## 0.0.18
 
 ### Patch Changes
