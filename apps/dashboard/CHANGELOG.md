@@ -1,5 +1,11 @@
 # dashboard
 
+## 0.0.21
+
+### Patch Changes
+
+- aa721dd: Improved workflow
+
 ## 0.0.20
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # cherrytracer
 
+## 0.0.10
+
+### Patch Changes
+
+- aa721dd: Improved workflow
+
 ## 0.0.9
 
 ### Patch Changes
