@@ -1,5 +1,11 @@
 # cherrytracer
 
+## 0.0.9
+
+### Patch Changes
+
+- 6353c0b: Improved workflow
+
 ## 0.0.8
 
 ### Patch Changes
