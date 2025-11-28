@@ -3,6 +3,7 @@ import { generateId, getContext } from "./utils";
 import { createContextManager, type ContextManager } from "./context";
 import { scrubSensitiveData } from "./scrubber";
 import { instrumentFetch } from "./instrumentation";
+import { setupErrorCapture } from "./error-capture";
 
 const monotonicNow = () => {
   if (typeof performance !== "undefined" && typeof performance.now === "function") {
@@ -43,6 +44,8 @@ export class Cherrytracer {
       scrubSensitiveData: config.scrubSensitiveData ?? true,
       sensitiveKeys: config.sensitiveKeys || [],
       propagateTraceContext: config.propagateTraceContext ?? true,
+      captureErrors: config.captureErrors ?? true,
+      exitDelayMs: config.exitDelayMs ?? 100,
     };
 
     if (runtime === "browser" && (keyType !== "browser" || !this.config.apiKey.startsWith("ct_pub_"))) {
@@ -69,6 +72,14 @@ export class Cherrytracer {
     // GOD MODE: Auto-instrument fetch if enabled
     if (this.config.autoInstrument) {
       instrumentFetch(this);
+    }
+
+    // RED BUTTON: Auto-capture uncaught errors if enabled
+    if (this.config.captureErrors) {
+      setupErrorCapture(this, {
+        enabled: this.config.captureErrors,
+        exitDelayMs: this.config.exitDelayMs,
+      });
     }
   }
 

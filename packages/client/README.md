@@ -36,9 +36,7 @@ const tracer = new Cherrytracer({
 });
 ```
 
-That's it! God mode is now activated. 🎉
-
-## ✨ God Mode Features (Enabled by Default)
+## ✨ Features
 
 ### 1. 🔗 Auto Context Propagation
 
@@ -56,7 +54,7 @@ async function getUser(id, traceId) {
 **The Solution:** Cherrytracer does this automatically:
 
 ```typescript
-// 🎉 God mode - just log naturally!
+// 🎉 Just log naturally!
 async function getUser(id) {
   tracer.info("Fetching user", { id });  // Auto-linked to parent trace!
   const user = await db.find(id);
@@ -202,7 +200,7 @@ const tracer = new Cherrytracer({
   batchSize?: number;          // Default: 50 events
   enabled?: boolean;           // Default: true
   
-  // God Mode Features (enabled by default):
+  // Features (enabled by default):
   autoInstrument?: boolean;    // Default: true (auto-trace fetch)
   scrubSensitiveData?: boolean;// Default: true (redact passwords etc.)
   propagateTraceContext?: boolean; // Default: true (inject trace headers)
@@ -382,7 +380,7 @@ We use `AsyncLocalStorage` in Node/Bun environments and a synchronous stack-base
 
 No! Logs are batched and sent asynchronously. The overhead is negligible (microseconds per log).
 
-### What if I want to disable god mode features?
+### What if I want to disable features?
 
 No problem! All features can be disabled individually via configuration options.
 
@@ -396,9 +394,8 @@ Absolutely! Cherrytracer works great with Vercel, Cloudflare Workers, Lambda, et
 
 ## 📚 Learn More
 
-- **Dashboard**: [cherrytracer.io](https://cherrytracer.io)
-- **Documentation**: [docs.cherrytracer.io](https://docs.cherrytracer.io)
-- **Examples**: See [example-god-mode.ts](./example-god-mode.ts)
+- **Dashboard**: [cherrytracer.com](https://cherrytracer.com)
+- **Documentation**: [docs.cherrytracer.com](https://docs.cherrytracer.com)
 
 ## 📄 License
 

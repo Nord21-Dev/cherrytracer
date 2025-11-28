@@ -14,6 +14,8 @@ export interface CherryConfig {
   scrubSensitiveData?: boolean; // Auto-scrub sensitive data (default: true)
   sensitiveKeys?: string[]; // Custom sensitive keys to scrub (extends defaults)
   propagateTraceContext?: boolean; // Inject trace headers into fetch (default: true)
+  captureErrors?: boolean | 'passive'; // Auto-capture uncaught errors (default: true)
+  exitDelayMs?: number; // Node only: delay before process exit on crash (default: 100ms)
 }
 
 export interface LogEvent {
