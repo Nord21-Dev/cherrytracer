@@ -3,12 +3,13 @@ export const useProject = () => {
     const toast = useToast()
     const { fetchApi } = useCherryApi()
     const config = useRuntimeConfig()
+    const { user } = useAuth()
 
     const baseURL = import.meta.server ? config.apiBase : undefined
 
     // Fetch list of projects available to this admin
     const headers = import.meta.server ? useRequestHeaders(['cookie']) : {}
-    
+
     const { data: projects, status, refresh } = useFetch<any[]>('/api/projects', {
         key: 'projects-list',
         default: () => [],
@@ -24,8 +25,19 @@ export const useProject = () => {
         projects,
         (newProjects) => {
             if (newProjects && newProjects.length > 0) {
-                if (!selectedProjectId.value || !newProjects.find((p: any) => p.id === selectedProjectId.value)) {
-                    selectedProjectId.value = newProjects[0].id
+                // If we have a selected project, verify it still exists
+                const currentExists = selectedProjectId.value && newProjects.find((p: any) => p.id === selectedProjectId.value)
+
+                if (!currentExists) {
+                    // Try to use the user's last selected project
+                    const lastProject = user.value?.lastProjectId && newProjects.find((p: any) => p.id === user.value.lastProjectId)
+
+                    if (lastProject) {
+                        selectedProjectId.value = lastProject.id
+                    } else {
+                        // Fallback to first project
+                        selectedProjectId.value = newProjects[0].id
+                    }
                 }
             } else {
                 selectedProjectId.value = null
@@ -33,6 +45,23 @@ export const useProject = () => {
         },
         { immediate: true }
     )
+
+    // Sync selection to user profile
+    watch(selectedProjectId, async (newId) => {
+        if (newId && user.value && user.value.lastProjectId !== newId) {
+            try {
+                await fetchApi('/api/auth/me', {
+                    method: 'PATCH',
+                    body: { lastProjectId: newId }
+                })
+                // Update local user state to avoid redundant calls
+                user.value.lastProjectId = newId
+            } catch (e) {
+                // Silent fail
+                console.error('Failed to sync project selection', e)
+            }
+        }
+    })
 
     const createProject = async (name: string, icon: string) => {
         try {

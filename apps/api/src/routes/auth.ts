@@ -25,7 +25,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
                     maxAge: 7 * 86400,
                 });
 
-                return { success: true, user: { id: user.id, email: user.email }, apiKey: project.apiKey };
+                return { success: true, user: { id: user.id, email: user.email, lastProjectId: user.lastProjectId }, apiKey: project.apiKey };
             } catch (e) {
                 set.status = 403;
                 return { error: "Setup failed or system already claimed" };
@@ -56,7 +56,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
                 maxAge: 7 * 86400,
             });
 
-            return { success: true, user: { id: user.id, email: user.email } };
+            return { success: true, user: { id: user.id, email: user.email, lastProjectId: user.lastProjectId } };
         },
         {
             body: t.Object({ email: t.String(), password: t.String() }),
@@ -76,6 +76,60 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         }
 
         return { authenticated: true, user: profile };
+    })
+
+    .patch("/me", async ({ body, jwt, cookie: { auth_session }, set }) => {
+        if (!auth_session.value) {
+            set.status = 401;
+            return { authenticated: false };
+        }
+
+        const profile = await jwt.verify(auth_session.value as string);
+        if (!profile) {
+            set.status = 401;
+            return { authenticated: false };
+        }
+
+        const updated = await userService.updateUser(profile.id as string, {
+            lastProjectId: body.lastProjectId
+        });
+
+        // Update the token with new info if needed, or just return success
+        // For now, we don't store lastProjectId in the token, so no need to resign
+
+        return { success: true, user: { id: updated.id, email: updated.email, lastProjectId: updated.lastProjectId } };
+    }, {
+        body: t.Object({
+            lastProjectId: t.Optional(t.String())
+        })
+    })
+
+    .put("/password", async ({ body, jwt, cookie: { auth_session }, set }) => {
+        if (!auth_session.value) {
+            set.status = 401;
+            return { error: "Unauthorized" };
+        }
+
+        const profile = await jwt.verify(auth_session.value as string);
+        if (!profile) {
+            set.status = 401;
+            return { error: "Unauthorized" };
+        }
+
+        const user = await userService.verifyUser(profile.email as string, body.currentPassword);
+        if (!user) {
+            set.status = 403;
+            return { error: "Invalid current password" };
+        }
+
+        await userService.updatePassword(profile.id as string, body.newPassword);
+
+        return { success: true };
+    }, {
+        body: t.Object({
+            currentPassword: t.String(),
+            newPassword: t.String()
+        })
     })
 
     .post("/logout", ({ cookie: { auth_session } }) => {
