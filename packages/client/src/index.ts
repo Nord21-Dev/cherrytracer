@@ -45,6 +45,7 @@ export class Cherrytracer {
     if (typeof window === "undefined") {
       try {
         // Dynamic require to avoid bundling issues in browser
+        // @ts-ignore
         const { AsyncLocalStorage } = require("node:async_hooks");
         this.storage = new AsyncLocalStorage();
       } catch (e) {
