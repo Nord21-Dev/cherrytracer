@@ -65,7 +65,31 @@ Call `info`, `warn`, `error`, or `debug` to record a message. Each call retains 
 
 ### Tracing & spans
 
-Create spans to connect related logs and measure durations. `startSpan` immediately emits a `span_event: "start"` log and returns a span helper:
+Create spans to connect related logs and measure durations.
+
+#### Automatic Tracing (Recommended)
+
+Use `trace()` to automatically handle context propagation. Nested spans will automatically inherit the parent's trace ID and span ID.
+
+```ts
+// Parent span
+tracer.trace("checkout_flow", (span) => {
+  span.info("Starting checkout");
+
+  // Nested span - automatically picks up parent context!
+  tracer.trace("payment_gateway", (childSpan) => {
+    childSpan.info("Authorizing card");
+    // ...
+  });
+});
+```
+
+- `trace` automatically ends the span when the callback finishes (or when the returned Promise resolves).
+- Context is propagated using `AsyncLocalStorage` (Node/Bun), so you don't need to pass span objects around.
+
+#### Manual Tracing
+
+`startSpan` immediately emits a `span_event: "start"` log and returns a span helper:
 
 ```ts
 const parent = tracer.startSpan("checkout_flow");
@@ -88,6 +112,51 @@ The span helper exposes `.id`, so reuse that value when passing `parentSpanId` t
 - `attributes` lets you attach static metadata (merged into every start/end log) such as operation names, environment tags, or correlation IDs.
 - `end()` emits a final log with `duration_ms`, `status`, and `span_event: "end"` using a monotonic clock, ensuring wall-clock jumps can’t skew timing.
 - Within a span you can still call `info`, `warn`, `error`, or `debug`; each log is tagged with the span’s `traceId` and `spanId`.
+
+### Real-world Examples
+
+Here is how you might trace a complete payment flow:
+
+```ts
+// 1. Start the main operation
+await tracer.trace("process_payment", async (span) => {
+  const userId = "user_123";
+  const amount = 5000; // $50.00
+
+  span.info("Processing payment request", { userId, amount });
+
+  try {
+    // 2. Check Balance (Nested Span)
+    await tracer.trace("check_balance", async (balanceSpan) => {
+      const balance = await db.getUserBalance(userId);
+      
+      if (balance < amount) {
+        balanceSpan.warn("Insufficient funds", { balance, required: amount });
+        throw new Error("Insufficient funds");
+      }
+      
+      balanceSpan.info("Balance check passed", { balance });
+    });
+
+    // 3. Charge Card (Nested Span)
+    await tracer.trace("charge_card", async (chargeSpan) => {
+      chargeSpan.info("Calling Stripe API...");
+      const result = await stripe.charges.create({ amount, currency: "usd" });
+      
+      chargeSpan.info("Charge successful", { chargeId: result.id });
+    });
+
+    span.info("Payment completed successfully");
+
+  } catch (err) {
+    // 4. Handle Errors
+    span.error("Payment failed", { error: err.message });
+    throw err; // Re-throw to handle it in the API response
+  }
+});
+```
+
+This generates a beautiful trace where `check_balance` and `charge_card` are children of `process_payment`. If `check_balance` fails, the parent span records the error, and you can see exactly where it stopped.
 
 ### Batching, queueing, and flush guarantees
 
