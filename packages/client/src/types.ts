@@ -8,6 +8,12 @@ export interface CherryConfig {
   batchSize?: number; // default 50
   enabled?: boolean; // default true
   keyType?: "browser" | "server"; // Hint for runtime warnings (defaults to environment)
+
+  // God Mode Features
+  autoInstrument?: boolean; // Auto-instrument fetch calls (default: true)
+  scrubSensitiveData?: boolean; // Auto-scrub sensitive data (default: true)
+  sensitiveKeys?: string[]; // Custom sensitive keys to scrub (extends defaults)
+  propagateTraceContext?: boolean; // Inject trace headers into fetch (default: true)
 }
 
 export interface LogEvent {
