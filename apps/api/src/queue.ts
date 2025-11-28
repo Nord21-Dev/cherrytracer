@@ -37,7 +37,7 @@ class IngestQueue {
 
   private interval: Timer | null = null;
   private isFlushing = false;
-  private notificationBuffer: Map<string, number> = new Map();
+  private notificationBuffer: Map<string, { total: number; critical: number }> = new Map();
   private notificationFlushScheduled = false;
 
   private scheduleNotificationFlush() {
@@ -51,8 +51,11 @@ class IngestQueue {
       const pending = this.notificationBuffer;
       this.notificationBuffer = new Map();
 
-      for (const [projectId, count] of pending) {
-        websocketService.broadcast(projectId, 'new_logs', { count });
+      for (const [projectId, counts] of pending) {
+        websocketService.broadcast(projectId, 'new_logs', {
+          count: counts.total,
+          criticalCount: counts.critical,
+        });
       }
     });
   }
@@ -64,7 +67,7 @@ class IngestQueue {
     this.isFlushing = true;
     const batch = this.queue.splice(0, this.BATCH_SIZE);
 
-    const projectCounts = new Map<string, number>();
+  const projectCounts = new Map<string, { total: number; critical: number }>();
 
     // Pre-process batch to compute fingerprints
     const processedBatch = batch.map(log => {
@@ -73,8 +76,13 @@ class IngestQueue {
     });
 
     processedBatch.forEach(log => {
-      const count = projectCounts.get(log.projectId) || 0;
-      projectCounts.set(log.projectId, count + 1);
+      const existing = projectCounts.get(log.projectId) || { total: 0, critical: 0 };
+      const isCritical = (log.data as Record<string, any> | null)?.error_source === 'auto_captured';
+
+      existing.total += 1;
+      if (isCritical) existing.critical += 1;
+
+      projectCounts.set(log.projectId, existing);
     });
 
     try {
@@ -136,9 +144,12 @@ class IngestQueue {
       const logsToInsert = processedBatch.map(({ pattern, ...log }) => log);
       await db.insert(logs).values(logsToInsert);
 
-      for (const [projectId, count] of projectCounts) {
-        const existing = this.notificationBuffer.get(projectId) || 0;
-        this.notificationBuffer.set(projectId, existing + count);
+      for (const [projectId, counts] of projectCounts) {
+        const existing = this.notificationBuffer.get(projectId) || { total: 0, critical: 0 };
+        this.notificationBuffer.set(projectId, {
+          total: existing.total + counts.total,
+          critical: existing.critical + counts.critical,
+        });
       }
 
       this.scheduleNotificationFlush();

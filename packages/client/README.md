@@ -361,7 +361,6 @@ const tracerWithoutHook = new Cherrytracer({
   captureErrors: false,      // never installs the hook
 });
 ```
-```
 
 ### Custom Sensitive Keys
 
@@ -401,6 +400,109 @@ Cherrytracer works with **any JavaScript/TypeScript framework**:
 - ✅ Browser apps
 - ✅ Serverless functions
 - ✅ Edge functions
+
+## 🏗️ Idiomatic NestJS (Express + Fastify)
+
+If you want a fully Nest-style solution that also works with Fastify, wrap every request in a global `CherrytracerInterceptor` and trace the pipeline from top to bottom.
+
+### 1. Interceptor implementation
+
+```ts
+// cherrytracer.interceptor.ts
+import {
+  CallHandler,
+  ExecutionContext,
+  Injectable,
+  NestInterceptor,
+} from '@nestjs/common';
+import { Observable, from, lastValueFrom } from 'rxjs';
+import { Cherrytracer } from 'cherrytracer';
+
+@Injectable()
+export class CherrytracerInterceptor implements NestInterceptor {
+  constructor(private readonly tracer: Cherrytracer) {}
+
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    const httpCtx = context.switchToHttp();
+    const req = httpCtx.getRequest<Request>();
+    const spanName = `${req.method} ${req.originalUrl ?? req.url}`;
+
+    return from(
+      this.tracer.trace(spanName, async (span) => {
+        try {
+          const result = await lastValueFrom(next.handle());
+          return result;
+        } catch (err: any) {
+          span.error?.('Request failed', {
+            message: err?.message ?? String(err),
+            stack: err?.stack,
+          });
+          throw err;
+        }
+      }),
+    );
+  }
+}
+```
+
+### 2. Wire it up globally
+
+```ts
+// cherrytracer.provider.ts
+import { Cherrytracer } from 'cherrytracer';
+
+export const CHERRYTRACER = Symbol('CHERRYTRACER');
+
+export const cherrytracerProvider = {
+  provide: CHERRYTRACER,
+  useFactory: () => {
+    return new Cherrytracer({
+      apiKey: process.env.CHERRYTRACER_API_KEY!,
+      projectId: process.env.CHERRYTRACER_PROJECT_ID!,
+    });
+  },
+};
+
+// app.module.ts
+import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { cherrytracerProvider } from './cherrytracer.provider';
+import { CherrytracerInterceptor } from './cherrytracer.interceptor';
+
+@Module({
+  imports: [],
+  providers: [
+    cherrytracerProvider,
+    CherrytracerInterceptor,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: CherrytracerInterceptor,
+    },
+  ],
+})
+export class AppModule {}
+```
+
+If you prefer loose coupling, inject the `CHERRYTRACER` token into the interceptor instead of depending on the class directly:
+
+```ts
+import {
+  CallHandler,
+  ExecutionContext,
+  Inject,
+  Injectable,
+  NestInterceptor,
+} from '@nestjs/common';
+import { CHERRYTRACER } from './cherrytracer.provider';
+import { Cherrytracer } from 'cherrytracer';
+
+@Injectable()
+export class CherrytracerInterceptor implements NestInterceptor {
+  constructor(@Inject(CHERRYTRACER) private readonly tracer: Cherrytracer) {}
+
+  // ...same intercept() as above
+}
+```
 
 ## 🤔 FAQ
 

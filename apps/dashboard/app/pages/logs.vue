@@ -7,6 +7,11 @@
             </div>
             <div class="flex items-center gap-3">
                 <USwitch v-model="showSystemEvents" label="Raw Events" />
+                <USwitch v-model="showCrashesOnly" label="Crashes" color="error" />
+                <UBadge v-if="newCriticalCount > 0" color="error" variant="solid" size="xs"
+                    class="rounded-full">
+                    Crash {{ newCriticalCount }}
+                </UBadge>
                 <UBadge v-if="!isLive && newLogsCount > 0" color="primary" variant="solid" size="xs"
                     class="rounded-full">
                     {{ newLogsCount }}
@@ -18,7 +23,9 @@
         <!-- Filters Toolbar -->
         <FilterBar v-model:search="filters.search" v-model:filters="filters.structured" @refresh="refreshLogs" />
 
-        <UCard>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 order-2 lg:order-1">
+                <UCard>
             <template #header>
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
@@ -29,7 +36,8 @@
                     <UTabs :items="tabItems" v-model="viewMode" :content="false" size="sm" />
                 </div>
             </template>
-            <LogGroups v-if="viewMode === 'patterns'" :project-id="selectedProjectId || ''" @select="selectPattern" />
+            <LogGroups v-if="viewMode === 'patterns'" :project-id="selectedProjectId || ''"
+                :crash-only="showCrashesOnly" @select="selectPattern" />
             <div v-else-if="logs.length" class="font-mono text-xs">
                 <div class="custom-scrollbar overflow-x-auto">
                     <table class="w-full min-w-[720px] text-left border-collapse">
@@ -55,7 +63,8 @@
                         </thead>
                         <tbody class="divide-y divide-neutral-200 dark:divide-neutral-800/50">
                             <tr v-for="log in logs" :key="log.id"
-                                class="group hover:bg-neutral-100/30 dark:hover:bg-white/3 transition-colors cursor-pointer relative"
+                                :class="['group hover:bg-neutral-100/30 dark:hover:bg-white/3 transition-colors cursor-pointer relative',
+                                isCrashLog(log) ? 'bg-rose-50/40 dark:bg-rose-500/5 border-l-2 border-rose-500/70' : '']"
                                 @click="openDrawer(log)">
                                 <td
                                     class="py-1 px-1 text-neutral-500 dark:text-neutral-500 whitespace-nowrap group-hover:text-neutral-700 dark:group-hover:text-neutral-300">
@@ -74,10 +83,16 @@
                                     </UBadge>
                                 </td>
                                 <td class=" text-neutral-700 dark:text-neutral-300">
-                                    <p
-                                        class="text-xs font-mono text-neutral-900 dark:text-neutral-100 opacity-90 group-hover:opacity-100 break-all">
-                                        {{ log.message }}
-                                    </p>
+                                    <div class="flex items-center gap-2">
+                                        <UBadge v-if="isCrashLog(log)" color="error" variant="solid" size="xs"
+                                            class="uppercase tracking-widest font-bold">
+                                            Crash
+                                        </UBadge>
+                                        <p
+                                            class="text-xs font-mono text-neutral-900 dark:text-neutral-100 opacity-90 group-hover:opacity-100 break-all">
+                                            {{ log.message }}
+                                        </p>
+                                    </div>
                                     <!-- <div v-if="log.data && Object.keys(log.data).length"
                                         class="mt-1 text-[10px] opacity-50">
                                         {{ JSON.stringify(log.data) }}
@@ -108,7 +123,12 @@
                     Load older logs
                 </UButton>
             </div>
-        </UCard>
+                </UCard>
+            </div>
+            <div class="order-1 lg:order-2">
+                <CrashOverview />
+            </div>
+        </div>
 
         <!-- Detail Drawer -->
         <USlideover v-model:open="isDrawerOpen" title="Log Details">
@@ -130,6 +150,16 @@
                             <label
                                 class="text-xs text-neutral-500 dark:text-neutral-500 uppercase font-bold">Source</label>
                             <div class="mt-1 uppercase">{{ formatSource(selectedLog.source) }}</div>
+                        </div>
+                        <div>
+                            <label
+                                class="text-xs text-neutral-500 dark:text-neutral-500 uppercase font-bold">Crash</label>
+                            <div class="mt-1">
+                                <UBadge v-if="isCrashLog(selectedLog)" color="error" variant="solid" size="xs">
+                                    Auto captured
+                                </UBadge>
+                                <span v-else class="text-neutral-500 dark:text-neutral-400 text-xs">Manual</span>
+                            </div>
                         </div>
                         <div>
                             <label
@@ -169,7 +199,7 @@ import 'vue-json-pretty/lib/styles.css'
 
 const { fetchApi } = useCherryApi()
 const { selectedProject, selectedProjectId } = useProject()
-const { newLogsCount, resetCount } = useRealtime()
+const { newLogsCount, newCriticalCount, resetCount, resetCriticalCount } = useRealtime()
 
 // State
 const logs = ref<any[]>([])
@@ -179,6 +209,7 @@ const isDrawerOpen = ref(false)
 const selectedLog = ref<any>(null)
 const isLive = ref(true)
 const showSystemEvents = ref(false)
+const showCrashesOnly = ref(false)
 const viewMode = ref<'list' | 'patterns'>('list')
 
 // Tabs items for view mode
@@ -244,10 +275,11 @@ const { data: initialData, pending, refresh } = await useAsyncData('logs',
             search: filters.search,
             level: filters.level,
             filters: JSON.stringify(filters.structured),
-            exclude_system_events: (!showSystemEvents.value).toString()
+            exclude_system_events: (!showSystemEvents.value).toString(),
+            crash_only: showCrashesOnly.value.toString()
         }
     }),
-    { watch: [filters, showSystemEvents], server: false }
+    { watch: [filters, showSystemEvents, showCrashesOnly], server: false }
 )
 
 watch(initialData, (newVal) => {
@@ -275,7 +307,8 @@ const loadMore = async () => {
             search: filters.search,
             level: filters.level,
             filters: JSON.stringify(filters.structured),
-            exclude_system_events: (!showSystemEvents.value).toString()
+            exclude_system_events: (!showSystemEvents.value).toString(),
+            crash_only: showCrashesOnly.value.toString()
         }
     })
     if (res?.data) {
@@ -316,7 +349,10 @@ const openDrawer = (log: any) => {
 const refreshLogs = async () => {
     await refresh() // Your existing refresh function
     resetCount() // Reset the counter to 0
+    resetCriticalCount()
 }
+
+const isCrashLog = (log: any) => !!(log?.isCritical || log?.data?.error_source === 'auto_captured')
 </script>
 
 <style scoped>

@@ -36,6 +36,13 @@ function getUrlString(input: RequestInfo | URL): string {
     return String(input);
 }
 
+function shouldSkipInstrumentation(url: string, baseUrl: string): boolean {
+    if (!baseUrl) return false;
+
+    const ingestEndpoint = `${baseUrl}/ingest`;
+    return url === ingestEndpoint;
+}
+
 /**
  * Instrument fetch to automatically create spans and inject trace headers
  */
@@ -54,6 +61,12 @@ export function instrumentFetch(tracer: Cherrytracer) {
         init?: RequestInit
     ): Promise<Response> {
         const url = getUrlString(input);
+        const baseUrl = (tracer as any).config.baseUrl;
+
+        if (shouldSkipInstrumentation(url, baseUrl)) {
+            // Avoid instrumenting our own ingest calls to prevent recursive logging
+            return originalFetch!(input, init);
+        }
 
         // Wrap in a trace span
         return tracer.trace(`fetch ${url}`, async (span) => {
@@ -77,9 +90,10 @@ export function instrumentFetch(tracer: Cherrytracer) {
                 const duration = Date.now() - startTime;
 
                 // Log fetch metadata
-                span.info('fetch completed', {
+                const method = (init?.method || 'GET').toUpperCase();
+                span.info(`${method} ${url}`, {
                     url,
-                    method: init?.method || 'GET',
+                    method,
                     status: response.status,
                     statusText: response.statusText,
                     duration_ms: duration,

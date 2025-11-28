@@ -28,7 +28,7 @@ export const queryRoutes = new Elysia()
         const {
             project_id, limit = "50", offset = "0",
             level, search, start_date, end_date, trace_id, filters,
-            exclude_system_events
+            exclude_system_events, error_source, crash_only
         } = query;
 
         const conditions = [eq(logs.projectId, project_id)];
@@ -46,6 +46,14 @@ export const queryRoutes = new Elysia()
             conditions.push(sql`to_tsvector('simple', ${logs.message}) @@ plainto_tsquery('simple', ${search})`);
         }
 
+        const normalizedErrorSource = crash_only === 'true'
+            ? 'auto_captured'
+            : error_source;
+
+        if (normalizedErrorSource) {
+            conditions.push(sql`${logs.data}->>'error_source' = ${normalizedErrorSource}`);
+        }
+
         if (filters) {
             try {
                 const parsed = JSON.parse(filters) as Record<string, string>;
@@ -60,12 +68,17 @@ export const queryRoutes = new Elysia()
             }
         }
 
-        const data = await db.select()
+        const rows = await db.select()
             .from(logs)
             .where(and(...conditions))
             .limit(parseInt(limit))
             .offset(parseInt(offset))
             .orderBy(desc(logs.timestamp));
+
+        const data = rows.map((row) => ({
+            ...row,
+            isCritical: ((row.data as Record<string, any> | null)?.error_source) === 'auto_captured'
+        }));
 
         return { data };
     }, {
@@ -80,7 +93,48 @@ export const queryRoutes = new Elysia()
             end_date: t.Optional(t.String()),
             trace_id: t.Optional(t.String()),
             filters: t.Optional(t.String()), // JSON string of Record<string, string>
-            exclude_system_events: t.Optional(t.String())
+            exclude_system_events: t.Optional(t.String()),
+            error_source: t.Optional(t.String()),
+            crash_only: t.Optional(t.String())
+        })
+    })
+    .get("/crashes", async ({ query }) => {
+        const { project_id, limit = "20", start_date, end_date } = query;
+
+        const clauses = [
+            sql`${logs.projectId} = ${project_id}`,
+            sql`${logs.data}->>'error_source' = 'auto_captured'`
+        ];
+
+        if (start_date) clauses.push(sql`${logs.timestamp} >= ${new Date(start_date)}`);
+        if (end_date) clauses.push(sql`${logs.timestamp} <= ${new Date(end_date)}`);
+
+        const whereSql = sql.join(clauses, sql` AND `);
+        const limitValue = Math.min(Math.max(parseInt(limit), 1), 100);
+
+        const crashRows = await db.execute(sql`
+            SELECT 
+                ${logs.message} AS message,
+                ${logs.data}->>'error_type' AS error_type,
+                ${logs.data}->>'error_name' AS error_name,
+                (${logs.data}->'stack_trace'->>0) AS top_frame,
+                COUNT(*)::int AS count,
+                MAX(${logs.timestamp}) AS last_seen
+            FROM ${logs}
+            WHERE ${whereSql}
+            GROUP BY message, error_type, error_name, top_frame
+            ORDER BY count DESC, last_seen DESC
+            LIMIT ${limitValue}
+        `);
+
+        return { data: crashRows };
+    }, {
+        detail: { tags: ["Query"], summary: "Crash summaries" },
+        query: t.Object({
+            project_id: t.String(),
+            limit: t.Optional(t.String()),
+            start_date: t.Optional(t.String()),
+            end_date: t.Optional(t.String())
         })
     })
     .get("/stats", async ({ query }) => {
@@ -109,7 +163,7 @@ export const queryRoutes = new Elysia()
     .get("/groups", async ({ query }) => {
         const {
             project_id, limit = "50", offset = "0", sort = "last_seen",
-            level, exclude_system_events
+            level, exclude_system_events, error_source, crash_only
         } = query;
 
         const conditions = [eq(logGroups.projectId, project_id)];
@@ -125,6 +179,19 @@ export const queryRoutes = new Elysia()
                 WHERE ${logs.projectId} = ${logGroups.projectId}
                   AND ${logs.fingerprint} = ${logGroups.fingerprint}
                   AND ${logs.data}->>'span_event' IS NOT NULL
+            )`);
+        }
+
+        const normalizedGroupErrorSource = crash_only === 'true'
+            ? 'auto_captured'
+            : error_source;
+
+        if (normalizedGroupErrorSource) {
+            conditions.push(sql`EXISTS (
+                SELECT 1 FROM ${logs} as source
+                WHERE source.project_id = ${logGroups.projectId}
+                  AND source.fingerprint = ${logGroups.fingerprint}
+                  AND source.data->>'error_source' = ${normalizedGroupErrorSource}
             )`);
         }
 
@@ -146,6 +213,8 @@ export const queryRoutes = new Elysia()
             offset: t.Optional(t.String()),
             sort: t.Optional(t.String()), // 'last_seen' | 'count'
             level: t.Optional(t.String()),
-            exclude_system_events: t.Optional(t.String())
+            exclude_system_events: t.Optional(t.String()),
+            error_source: t.Optional(t.String()),
+            crash_only: t.Optional(t.String())
         })
     });
