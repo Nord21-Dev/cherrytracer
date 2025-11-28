@@ -54,7 +54,7 @@ jobs:
           GIT_RANGE: ${{ github.event.before }}..${{ github.sha }}
         run: bun scripts/check-releases.ts
 
-      - name: Create GitHub Releases
+      - name: Create GitHub Releases with Tags
         if: steps.releases.outputs.cherrytracer_changed == 'true' || steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -66,10 +66,10 @@ jobs:
             tags["cherrytracer"]="cherrytracer@${{ steps.releases.outputs.cherrytracer_version }}"
           fi
           if [ "${{ steps.releases.outputs.api_changed }}" = "true" ]; then
-            tags["api"]="api@${{ steps.releases.outputs.api_version }}"
+            tags["api"]="apps/api@${{ steps.releases.outputs.api_version }}"
           fi
           if [ "${{ steps.releases.outputs.dashboard_changed }}" = "true" ]; then
-            tags["dashboard"]="dashboard@${{ steps.releases.outputs.dashboard_version }}"
+            tags["dashboard"]="apps/dashboard@${{ steps.releases.outputs.dashboard_version }}"
           fi
 
           for key in "${!tags[@]}"; do
@@ -88,49 +88,3 @@ jobs:
               --target ${{ github.sha }}
           done
 
-      - name: Set up QEMU
-        if: github.event_name == 'workflow_dispatch' || (steps.changesets.outputs.published == 'true' && (steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true'))
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        if: github.event_name == 'workflow_dispatch' || (steps.changesets.outputs.published == 'true' && (steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true'))
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        if: github.event_name == 'workflow_dispatch' || (steps.changesets.outputs.published == 'true' && (steps.releases.outputs.api_changed == 'true' || steps.releases.outputs.dashboard_changed == 'true'))
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push API image
-        if: github.event_name == 'workflow_dispatch' || (steps.changesets.outputs.published == 'true' && steps.releases.outputs.api_changed == 'true')
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/api/Dockerfile
-          push: true
-          tags: |
-            nord21dev/cherrytracer-api:latest
-            nord21dev/cherrytracer-api:${{ steps.releases.outputs.api_version }}
-          build-args: |
-            APP_VERSION=${{ steps.releases.outputs.api_version }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=cherrytracer-api
-          cache-to: type=gha,mode=max,scope=cherrytracer-api
-
-      - name: Build and push Dashboard image
-        if: github.event_name == 'workflow_dispatch' || (steps.changesets.outputs.published == 'true' && steps.releases.outputs.dashboard_changed == 'true')
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/dashboard/Dockerfile
-          push: true
-          tags: |
-            nord21dev/cherrytracer-dashboard:latest
-            nord21dev/cherrytracer-dashboard:${{ steps.releases.outputs.dashboard_version }}
-          build-args: |
-            APP_VERSION=${{ steps.releases.outputs.dashboard_version }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=cherrytracer-dashboard
-          cache-to: type=gha,mode=max,scope=cherrytracer-dashboard

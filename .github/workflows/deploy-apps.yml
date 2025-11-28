@@ -1,0 +1,51 @@
+name: Deploy Apps
+on:
+  push:
+    tags:
+      - 'apps/dashboard@*'
+      - 'apps/api@*'
+
+jobs:
+  build-push-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      # 1. Determine which app triggered the tag
+      - name: Extract App Name
+        id: meta
+        run: |
+          if [[ "${{ github.ref }}" == *"apps/dashboard"* ]]; then
+            echo "APP_NAME=dashboard" >> $GITHUB_OUTPUT
+            echo "DOCKER_FILE=apps/dashboard/Dockerfile" >> $GITHUB_OUTPUT
+            echo "IMAGE_NAME=nord21dev/cherrytracer-dashboard" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == *"apps/api"* ]]; then
+            echo "APP_NAME=api" >> $GITHUB_OUTPUT
+            echo "DOCKER_FILE=apps/api/Dockerfile" >> $GITHUB_OUTPUT
+            echo "IMAGE_NAME=nord21dev/cherrytracer-api" >> $GITHUB_OUTPUT
+          fi
+
+      # 2. Setup Buildx and Docker Login
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 3. Build and Push
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ steps.meta.outputs.DOCKER_FILE }}
+          push: true
+          tags: ${{ steps.meta.outputs.IMAGE_NAME }}:latest,${{ steps.meta.outputs.IMAGE_NAME }}:${{ github.ref_name }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=${{ steps.meta.outputs.APP_NAME }}
+          cache-to: type=gha,mode=max,scope=${{ steps.meta.outputs.APP_NAME }}
