@@ -36,11 +36,43 @@ function getUrlString(input: RequestInfo | URL): string {
     return String(input);
 }
 
-function shouldSkipInstrumentation(url: string, baseUrl: string): boolean {
+const DEFAULT_IGNORED_ROUTES = [
+    "/_nuxt/",
+    "/_next/",
+    "/@vite/",
+    "/sockjs-node/",
+    "hot-update",
+];
+
+function shouldSkipInstrumentation(url: string, tracer: Cherrytracer): boolean {
+    const config = (tracer as any).config;
+    const baseUrl = config.baseUrl;
+
     if (!baseUrl) return false;
 
+    // 1. Always ignore ingest endpoint to prevent recursion
     const ingestEndpoint = `${baseUrl}/ingest`;
-    return url === ingestEndpoint;
+    if (url === ingestEndpoint) return true;
+
+    // 2. Check default ignored routes (unless disabled)
+    if (!config.disableDefaultIgnoredRoutes) {
+        for (const route of DEFAULT_IGNORED_ROUTES) {
+            if (url.includes(route)) return true;
+        }
+    }
+
+    // 3. Check custom ignored routes
+    if (config.ignoredRoutes && Array.isArray(config.ignoredRoutes)) {
+        for (const route of config.ignoredRoutes) {
+            if (typeof route === 'string') {
+                if (url.includes(route)) return true;
+            } else if (route instanceof RegExp) {
+                if (route.test(url)) return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -63,7 +95,7 @@ export function instrumentFetch(tracer: Cherrytracer) {
         const url = getUrlString(input);
         const baseUrl = (tracer as any).config.baseUrl;
 
-        if (shouldSkipInstrumentation(url, baseUrl)) {
+        if (shouldSkipInstrumentation(url, tracer)) {
             // Avoid instrumenting our own ingest calls to prevent recursive logging
             return originalFetch!(input, init);
         }

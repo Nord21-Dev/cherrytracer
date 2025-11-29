@@ -26,12 +26,13 @@ export const queryRoutes = new Elysia()
     })
     .get("/logs", async ({ query }) => {
         const {
-            project_id, limit = "50", offset = "0",
+            project_id, limit = "50", cursor,
             level, search, start_date, end_date, trace_id, filters,
             exclude_system_events, error_source, crash_only
         } = query;
 
         const conditions = [eq(logs.projectId, project_id)];
+        const needsFullData = Boolean(trace_id);
 
         if (exclude_system_events === 'true') {
             // Hide tracer-emitted span lifecycle events by default
@@ -60,7 +61,8 @@ export const queryRoutes = new Elysia()
                 for (const [key, value] of Object.entries(parsed)) {
                     if (key.startsWith('data.')) {
                         const jsonKey = key.slice(5);
-                        conditions.push(sql`${logs.data}->>${jsonKey} = ${value}`);
+                        const filterJson = { [jsonKey]: value };
+                        conditions.push(sql`${logs.data} @> ${JSON.stringify(filterJson)}::jsonb`);
                     }
                 }
             } catch (e) {
@@ -68,25 +70,55 @@ export const queryRoutes = new Elysia()
             }
         }
 
-        const rows = await db.select()
+        // Keyset pagination to avoid OFFSET scans
+        if (cursor) {
+            const [cursorTs, cursorId] = cursor.split("|");
+            if (cursorTs && cursorId) {
+                const cursorDate = new Date(cursorTs);
+                if (!isNaN(cursorDate.getTime())) {
+                    conditions.push(sql`(${logs.timestamp} < ${cursorDate} OR (${logs.timestamp} = ${cursorDate} AND ${logs.id} < ${cursorId}))`);
+                }
+            }
+        }
+
+        const limitValue = Math.min(Math.max(parseInt(limit), 1), 1000);
+
+        const selectShape: Record<string, any> = {
+            id: logs.id,
+            timestamp: logs.timestamp,
+            level: logs.level,
+            source: logs.source,
+            message: logs.message,
+            traceId: logs.traceId,
+            isCritical: sql<boolean>`(${logs.data}->>'error_source') = 'auto_captured'`
+        };
+
+        if (needsFullData) {
+            selectShape.data = logs.data;
+            selectShape.spanId = logs.spanId;
+        }
+
+        const rows = await db.select(selectShape)
             .from(logs)
             .where(and(...conditions))
-            .limit(parseInt(limit))
-            .offset(parseInt(offset))
-            .orderBy(desc(logs.timestamp));
+            // Fetch an extra row to build next cursor cheaply
+            .limit(limitValue + 1)
+            .orderBy(desc(logs.timestamp), desc(logs.id));
 
-        const data = rows.map((row) => ({
-            ...row,
-            isCritical: ((row.data as Record<string, any> | null)?.error_source) === 'auto_captured'
-        }));
+        const hasNextPage = rows.length > limitValue;
+        const page = hasNextPage ? rows.slice(0, limitValue) : rows;
+        const lastRow = page.at(-1);
+        const nextCursor = hasNextPage && lastRow
+            ? `${lastRow.timestamp.toISOString()}|${lastRow.id}`
+            : null;
 
-        return { data };
+        return { data: page, nextCursor };
     }, {
         detail: { tags: ["Query"], summary: "Fetch Logs" },
         query: t.Object({
             project_id: t.String(),
             limit: t.Optional(t.String()),
-            offset: t.Optional(t.String()),
+            cursor: t.Optional(t.String()),
             level: t.Optional(t.String()),
             search: t.Optional(t.String()),
             start_date: t.Optional(t.String()),
@@ -97,6 +129,37 @@ export const queryRoutes = new Elysia()
             error_source: t.Optional(t.String()),
             crash_only: t.Optional(t.String())
         })
+    })
+    .get("/logs/:id", async ({ params, query, set }) => {
+        const { id } = params;
+        const { project_id } = query;
+
+        const row = await db.query.logs.findFirst({
+            where: and(eq(logs.id, id), eq(logs.projectId, project_id))
+        });
+
+        if (!row) {
+            set.status = 404;
+            return { error: "Log not found" };
+        }
+
+        return {
+            data: {
+                id: row.id,
+                timestamp: row.timestamp,
+                level: row.level,
+                source: row.source,
+                message: row.message,
+                traceId: row.traceId,
+                spanId: row.spanId,
+                data: row.data,
+                isCritical: ((row.data as Record<string, any> | null)?.error_source) === 'auto_captured'
+            }
+        };
+    }, {
+        detail: { tags: ["Query"], summary: "Fetch Log Detail" },
+        params: t.Object({ id: t.String() }),
+        query: t.Object({ project_id: t.String() })
     })
     .get("/crashes", async ({ query }) => {
         const { project_id, limit = "20", start_date, end_date } = query;

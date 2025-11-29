@@ -81,6 +81,13 @@ export class Simulator {
     // Intentionally do NOT call span.end() to simulate an in-flight span
   }
 
+  triggerFatalError() {
+    // Throw on the next tick so it bubbles as an uncaught exception
+    setTimeout(() => {
+      throw new Error("Simulated fatal error from the Cherrytracer Playground");
+    }, 0);
+  }
+
   toggleAutoPilot(enabled: boolean) {
     if (this.isRunning === enabled) return;
     this.isRunning = enabled;

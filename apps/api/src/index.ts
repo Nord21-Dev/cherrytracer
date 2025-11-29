@@ -15,6 +15,7 @@ import { websocketService } from "./services/websocket";
 import { db } from "./db";
 import { projects } from "./db/schema";
 import { eq } from "drizzle-orm";
+import { indexService } from "./services/indexes";
 
 const app = new Elysia()
     .use(cors({
@@ -121,6 +122,10 @@ if (adminEmail && adminPass) {
         process.exit(1);
     }
 }
+
+indexService.ensureLogIndexes().catch((error) => {
+    console.error("[Indexes] Failed to ensure log indexes", error);
+});
 
 const port = process.env.PORT || 3000;
 app.listen({
