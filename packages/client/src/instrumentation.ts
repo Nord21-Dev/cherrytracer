@@ -36,6 +36,45 @@ function getUrlString(input: RequestInfo | URL): string {
     return String(input);
 }
 
+const DEFAULT_IGNORED_ROUTES = [
+    "/_nuxt/",
+    "/_next/",
+    "/@vite/",
+    "/sockjs-node/",
+    "hot-update",
+];
+
+function shouldSkipInstrumentation(url: string, tracer: Cherrytracer): boolean {
+    const config = (tracer as any).config;
+    const baseUrl = config.baseUrl;
+
+    if (!baseUrl) return false;
+
+    // 1. Always ignore ingest endpoint to prevent recursion
+    const ingestEndpoint = `${baseUrl}/ingest`;
+    if (url === ingestEndpoint) return true;
+
+    // 2. Check default ignored routes (unless disabled)
+    if (!config.disableDefaultIgnoredRoutes) {
+        for (const route of DEFAULT_IGNORED_ROUTES) {
+            if (url.includes(route)) return true;
+        }
+    }
+
+    // 3. Check custom ignored routes
+    if (config.ignoredRoutes && Array.isArray(config.ignoredRoutes)) {
+        for (const route of config.ignoredRoutes) {
+            if (typeof route === 'string') {
+                if (url.includes(route)) return true;
+            } else if (route instanceof RegExp) {
+                if (route.test(url)) return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 /**
  * Instrument fetch to automatically create spans and inject trace headers
  */
@@ -54,6 +93,12 @@ export function instrumentFetch(tracer: Cherrytracer) {
         init?: RequestInit
     ): Promise<Response> {
         const url = getUrlString(input);
+        const baseUrl = (tracer as any).config.baseUrl;
+
+        if (shouldSkipInstrumentation(url, tracer)) {
+            // Avoid instrumenting our own ingest calls to prevent recursive logging
+            return originalFetch!(input, init);
+        }
 
         // Wrap in a trace span
         return tracer.trace(`fetch ${url}`, async (span) => {
@@ -77,9 +122,10 @@ export function instrumentFetch(tracer: Cherrytracer) {
                 const duration = Date.now() - startTime;
 
                 // Log fetch metadata
-                span.info('fetch completed', {
+                const method = (init?.method || 'GET').toUpperCase();
+                span.info(`${method} ${url}`, {
                     url,
-                    method: init?.method || 'GET',
+                    method,
                     status: response.status,
                     statusText: response.statusText,
                     duration_ms: duration,

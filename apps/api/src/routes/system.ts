@@ -21,6 +21,9 @@ export const systemRoutes = new Elysia({ prefix: "/system" })
     .post("/update", async () => {
         return await systemService.triggerUpdate();
     })
+    .post("/truncate-logs", async () => {
+        return await systemService.truncateLogs();
+    })
 
     // --- Storage ---
     .get("/storage", async () => {

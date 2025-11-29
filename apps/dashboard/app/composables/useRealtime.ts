@@ -3,6 +3,7 @@ import { useWebSocket } from '@vueuse/core'
 type WebSocketMessage = {
     type: 'new_logs' | 'stats_update' | 'connected' | 'pong'
     count?: number
+    criticalCount?: number
     projectId?: string
 }
 
@@ -30,6 +31,7 @@ export const useRealtime = () => {
 
     const isConnected = ref(false)
     const newLogsCount = ref(0)
+    const newCriticalCount = ref(0)
     const lastUpdate = ref<Date | null>(null)
 
     const { status, send } = useWebSocket(getWsUrl(), {
@@ -55,6 +57,7 @@ export const useRealtime = () => {
 
                 if (data.type === 'new_logs') {
                     newLogsCount.value += (data.count || 1)
+                    newCriticalCount.value += (data.criticalCount || 0)
                     lastUpdate.value = new Date()
                 }
             } catch (e) {
@@ -66,6 +69,7 @@ export const useRealtime = () => {
     watch(selectedProjectId, (newId) => {
         if (newId && status.value === 'OPEN') {
             newLogsCount.value = 0
+            newCriticalCount.value = 0
             send(JSON.stringify({ type: 'subscribe', projectId: newId }))
         }
     })
@@ -74,10 +78,16 @@ export const useRealtime = () => {
         newLogsCount.value = 0
     }
 
+    const resetCriticalCount = () => {
+        newCriticalCount.value = 0
+    }
+
     return {
         isConnected,
         newLogsCount,
+        newCriticalCount,
         lastUpdate,
-        resetCount
+        resetCount,
+        resetCriticalCount,
     }
 }

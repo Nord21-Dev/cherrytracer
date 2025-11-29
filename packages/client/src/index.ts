@@ -44,6 +44,8 @@ export class Cherrytracer {
       scrubSensitiveData: config.scrubSensitiveData ?? true,
       sensitiveKeys: config.sensitiveKeys || [],
       propagateTraceContext: config.propagateTraceContext ?? true,
+      ignoredRoutes: config.ignoredRoutes || [],
+      disableDefaultIgnoredRoutes: config.disableDefaultIgnoredRoutes ?? false,
       captureErrors: config.captureErrors ?? true,
       exitDelayMs: config.exitDelayMs ?? 100,
     };

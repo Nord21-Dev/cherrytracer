@@ -54,6 +54,7 @@ import { formatDistanceToNow } from 'date-fns'
 
 const props = defineProps<{
     projectId: string
+    crashOnly?: boolean
 }>()
 
 defineEmits(['select'])
@@ -78,7 +79,8 @@ const fetchGroups = async () => {
             limit: 50,
             sort: 'last_seen',
             level,
-            exclude_system_events: 'true'
+            exclude_system_events: 'true',
+            crash_only: props.crashOnly ? 'true' : undefined
         }
     })
     if (res?.data) {
@@ -95,7 +97,7 @@ useIntervalFn(() => {
 }, 5000)
 
 // Watch for tab changes
-watch(selectedSeverity, () => {
+watch([selectedSeverity, () => props.crashOnly, () => props.projectId], () => {
     fetchGroups()
 })
 

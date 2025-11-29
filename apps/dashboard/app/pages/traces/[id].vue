@@ -624,8 +624,7 @@ const { data: response, status, refresh } = await useAsyncData(
     () => fetchApi<{ data: LogEntry[] }>('/api/logs', {
         params: {
             trace_id: traceId,
-            limit: 1000, // Fetch a large batch to ensure we get the whole trace
-            offset: 0
+            limit: 1000 // Fetch a large batch to ensure we get the whole trace
         }
     })
 )

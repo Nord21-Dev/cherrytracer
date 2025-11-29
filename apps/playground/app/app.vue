@@ -50,6 +50,11 @@
                             <span>In-Flight Span (no end)</span>
                             <span class="meta">Trace + open span</span>
                         </button>
+
+                        <button @click="sim.triggerFatalError()" class="btn btn-danger" data-tooltip="Throws an unhandled exception to exercise the Red Button error hook">
+                            <span>Simulate Fatal Error</span>
+                            <span class="meta">Unhandled exception</span>
+                        </button>
                     </div>
                 </div>
 

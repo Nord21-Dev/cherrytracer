@@ -109,7 +109,7 @@ function setupNodeErrorCapture(tracer: Cherrytracer, config: ErrorCaptureConfig)
     }
 
     // Register uncaughtException handler
-    process.on('uncaughtException', (error, origin) => {
+    process.on('uncaughtException', async (error, origin) => {
         try {
             captureCriticalError(tracer, error, {
                 type: 'uncaughtException',
@@ -117,7 +117,7 @@ function setupNodeErrorCapture(tracer: Cherrytracer, config: ErrorCaptureConfig)
             });
 
             // Attempt synchronous flush before exit
-            attemptSyncFlush(tracer);
+            await attemptSyncFlush(tracer);
 
             // Delay exit to allow async flush to complete
             setTimeout(() => {
@@ -130,7 +130,7 @@ function setupNodeErrorCapture(tracer: Cherrytracer, config: ErrorCaptureConfig)
     });
 
     // Register unhandledRejection handler
-    process.on('unhandledRejection', (reason, promise) => {
+    process.on('unhandledRejection', async (reason, promise) => {
         try {
             const errorObj = reason instanceof Error ? reason : new Error(String(reason));
 
@@ -140,7 +140,7 @@ function setupNodeErrorCapture(tracer: Cherrytracer, config: ErrorCaptureConfig)
             });
 
             // Flush but don't exit (Node doesn't exit on unhandled rejections by default)
-            attemptSyncFlush(tracer);
+            await attemptSyncFlush(tracer);
         } catch (e) {
             console.error('[Cherrytracer] Error in unhandledRejection handler:', e);
         }
@@ -234,12 +234,12 @@ function attemptFinalFlush(tracer: Cherrytracer) {
 /**
  * Node: Attempt synchronous flush (blocking)
  */
-function attemptSyncFlush(tracer: Cherrytracer) {
+async function attemptSyncFlush(tracer: Cherrytracer) {
     if (typeof process === 'undefined') return;
 
     try {
         // Flush immediately (async but we wait via setTimeout in caller)
-        tracer.flush(false);
+        await tracer.flush(false);
     } catch (e) {
         console.error('[Cherrytracer] Failed to flush on error:', e);
     }

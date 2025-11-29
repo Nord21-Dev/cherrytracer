@@ -26,12 +26,13 @@ export const queryRoutes = new Elysia()
     })
     .get("/logs", async ({ query }) => {
         const {
-            project_id, limit = "50", offset = "0",
+            project_id, limit = "50", cursor,
             level, search, start_date, end_date, trace_id, filters,
-            exclude_system_events
+            exclude_system_events, error_source, crash_only
         } = query;
 
         const conditions = [eq(logs.projectId, project_id)];
+        const needsFullData = Boolean(trace_id);
 
         if (exclude_system_events === 'true') {
             // Hide tracer-emitted span lifecycle events by default
@@ -46,13 +47,22 @@ export const queryRoutes = new Elysia()
             conditions.push(sql`to_tsvector('simple', ${logs.message}) @@ plainto_tsquery('simple', ${search})`);
         }
 
+        const normalizedErrorSource = crash_only === 'true'
+            ? 'auto_captured'
+            : error_source;
+
+        if (normalizedErrorSource) {
+            conditions.push(sql`${logs.data}->>'error_source' = ${normalizedErrorSource}`);
+        }
+
         if (filters) {
             try {
                 const parsed = JSON.parse(filters) as Record<string, string>;
                 for (const [key, value] of Object.entries(parsed)) {
                     if (key.startsWith('data.')) {
                         const jsonKey = key.slice(5);
-                        conditions.push(sql`${logs.data}->>${jsonKey} = ${value}`);
+                        const filterJson = { [jsonKey]: value };
+                        conditions.push(sql`${logs.data} @> ${JSON.stringify(filterJson)}::jsonb`);
                     }
                 }
             } catch (e) {
@@ -60,27 +70,134 @@ export const queryRoutes = new Elysia()
             }
         }
 
-        const data = await db.select()
+        // Keyset pagination to avoid OFFSET scans
+        if (cursor) {
+            const [cursorTs, cursorId] = cursor.split("|");
+            if (cursorTs && cursorId) {
+                const cursorDate = new Date(cursorTs);
+                if (!isNaN(cursorDate.getTime())) {
+                    conditions.push(sql`(${logs.timestamp} < ${cursorDate} OR (${logs.timestamp} = ${cursorDate} AND ${logs.id} < ${cursorId}))`);
+                }
+            }
+        }
+
+        const limitValue = Math.min(Math.max(parseInt(limit), 1), 1000);
+
+        const selectShape: Record<string, any> = {
+            id: logs.id,
+            timestamp: logs.timestamp,
+            level: logs.level,
+            source: logs.source,
+            message: logs.message,
+            traceId: logs.traceId,
+            isCritical: sql<boolean>`(${logs.data}->>'error_source') = 'auto_captured'`
+        };
+
+        if (needsFullData) {
+            selectShape.data = logs.data;
+            selectShape.spanId = logs.spanId;
+        }
+
+        const rows = await db.select(selectShape)
             .from(logs)
             .where(and(...conditions))
-            .limit(parseInt(limit))
-            .offset(parseInt(offset))
-            .orderBy(desc(logs.timestamp));
+            // Fetch an extra row to build next cursor cheaply
+            .limit(limitValue + 1)
+            .orderBy(desc(logs.timestamp), desc(logs.id));
 
-        return { data };
+        const hasNextPage = rows.length > limitValue;
+        const page = hasNextPage ? rows.slice(0, limitValue) : rows;
+        const lastRow = page.at(-1);
+        const nextCursor = hasNextPage && lastRow
+            ? `${lastRow.timestamp.toISOString()}|${lastRow.id}`
+            : null;
+
+        return { data: page, nextCursor };
     }, {
         detail: { tags: ["Query"], summary: "Fetch Logs" },
         query: t.Object({
             project_id: t.String(),
             limit: t.Optional(t.String()),
-            offset: t.Optional(t.String()),
+            cursor: t.Optional(t.String()),
             level: t.Optional(t.String()),
             search: t.Optional(t.String()),
             start_date: t.Optional(t.String()),
             end_date: t.Optional(t.String()),
             trace_id: t.Optional(t.String()),
             filters: t.Optional(t.String()), // JSON string of Record<string, string>
-            exclude_system_events: t.Optional(t.String())
+            exclude_system_events: t.Optional(t.String()),
+            error_source: t.Optional(t.String()),
+            crash_only: t.Optional(t.String())
+        })
+    })
+    .get("/logs/:id", async ({ params, query, set }) => {
+        const { id } = params;
+        const { project_id } = query;
+
+        const row = await db.query.logs.findFirst({
+            where: and(eq(logs.id, id), eq(logs.projectId, project_id))
+        });
+
+        if (!row) {
+            set.status = 404;
+            return { error: "Log not found" };
+        }
+
+        return {
+            data: {
+                id: row.id,
+                timestamp: row.timestamp,
+                level: row.level,
+                source: row.source,
+                message: row.message,
+                traceId: row.traceId,
+                spanId: row.spanId,
+                data: row.data,
+                isCritical: ((row.data as Record<string, any> | null)?.error_source) === 'auto_captured'
+            }
+        };
+    }, {
+        detail: { tags: ["Query"], summary: "Fetch Log Detail" },
+        params: t.Object({ id: t.String() }),
+        query: t.Object({ project_id: t.String() })
+    })
+    .get("/crashes", async ({ query }) => {
+        const { project_id, limit = "20", start_date, end_date } = query;
+
+        const clauses = [
+            sql`${logs.projectId} = ${project_id}`,
+            sql`${logs.data}->>'error_source' = 'auto_captured'`
+        ];
+
+        if (start_date) clauses.push(sql`${logs.timestamp} >= ${new Date(start_date)}`);
+        if (end_date) clauses.push(sql`${logs.timestamp} <= ${new Date(end_date)}`);
+
+        const whereSql = sql.join(clauses, sql` AND `);
+        const limitValue = Math.min(Math.max(parseInt(limit), 1), 100);
+
+        const crashRows = await db.execute(sql`
+            SELECT 
+                ${logs.message} AS message,
+                ${logs.data}->>'error_type' AS error_type,
+                ${logs.data}->>'error_name' AS error_name,
+                (${logs.data}->'stack_trace'->>0) AS top_frame,
+                COUNT(*)::int AS count,
+                MAX(${logs.timestamp}) AS last_seen
+            FROM ${logs}
+            WHERE ${whereSql}
+            GROUP BY message, error_type, error_name, top_frame
+            ORDER BY count DESC, last_seen DESC
+            LIMIT ${limitValue}
+        `);
+
+        return { data: crashRows };
+    }, {
+        detail: { tags: ["Query"], summary: "Crash summaries" },
+        query: t.Object({
+            project_id: t.String(),
+            limit: t.Optional(t.String()),
+            start_date: t.Optional(t.String()),
+            end_date: t.Optional(t.String())
         })
     })
     .get("/stats", async ({ query }) => {
@@ -109,7 +226,7 @@ export const queryRoutes = new Elysia()
     .get("/groups", async ({ query }) => {
         const {
             project_id, limit = "50", offset = "0", sort = "last_seen",
-            level, exclude_system_events
+            level, exclude_system_events, error_source, crash_only
         } = query;
 
         const conditions = [eq(logGroups.projectId, project_id)];
@@ -125,6 +242,19 @@ export const queryRoutes = new Elysia()
                 WHERE ${logs.projectId} = ${logGroups.projectId}
                   AND ${logs.fingerprint} = ${logGroups.fingerprint}
                   AND ${logs.data}->>'span_event' IS NOT NULL
+            )`);
+        }
+
+        const normalizedGroupErrorSource = crash_only === 'true'
+            ? 'auto_captured'
+            : error_source;
+
+        if (normalizedGroupErrorSource) {
+            conditions.push(sql`EXISTS (
+                SELECT 1 FROM ${logs} as source
+                WHERE source.project_id = ${logGroups.projectId}
+                  AND source.fingerprint = ${logGroups.fingerprint}
+                  AND source.data->>'error_source' = ${normalizedGroupErrorSource}
             )`);
         }
 
@@ -146,6 +276,8 @@ export const queryRoutes = new Elysia()
             offset: t.Optional(t.String()),
             sort: t.Optional(t.String()), // 'last_seen' | 'count'
             level: t.Optional(t.String()),
-            exclude_system_events: t.Optional(t.String())
+            exclude_system_events: t.Optional(t.String()),
+            error_source: t.Optional(t.String()),
+            crash_only: t.Optional(t.String())
         })
     });

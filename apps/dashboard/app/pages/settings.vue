@@ -215,7 +215,15 @@
                             </div>
                         </div>
 
-                        <div class="flex justify-end">
+
+
+                        <div class="flex justify-between items-center pt-4 border-t border-neutral-100 dark:border-neutral-800">
+                            <div class="text-sm">
+                                <UButton type="button" color="error" variant="ghost" icon="i-lucide-trash-2"
+                                    @click="confirmTruncateModalOpen = true">
+                                    Truncate All Logs
+                                </UButton>
+                            </div>
                             <UButton type="submit" :loading="savingStorage" color="neutral" variant="subtle">
                                 Update Limits
                             </UButton>
@@ -223,6 +231,40 @@
                     </form>
                 </UCard>
             </div>
+
+            <!-- Truncate Confirmation Modal -->
+            <UModal v-model:open="confirmTruncateModalOpen" title="Truncate All Logs" :ui="{ footer: 'justify-end' }">
+                <template #body>
+                    <div class="space-y-4">
+                        <p class="text-sm text-neutral-600 dark:text-neutral-400">
+                            Are you sure you want to <strong>delete all logs</strong>?
+                        </p>
+                        <div
+                            class="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-200 dark:border-red-800">
+                            <div class="flex items-start gap-3">
+                                <UIcon name="i-lucide-alert-octagon" class="text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                                <div>
+                                    <h4 class="font-semibold text-red-900 dark:text-red-100 mb-1">Destructive Action</h4>
+                                    <p class="text-sm text-red-800 dark:text-red-200">
+                                        This action will permanently delete all logs from the database. This cannot be undone.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-sm text-neutral-600 dark:text-neutral-400">
+                            This is useful if you want to free up space or start fresh.
+                        </p>
+                    </div>
+                </template>
+                <template #footer>
+                    <UButton @click="confirmTruncateModalOpen = false" color="neutral" variant="outline">
+                        Cancel
+                    </UButton>
+                    <UButton @click="truncateLogs" color="error" variant="solid" :loading="truncatingLogs">
+                        Yes, Truncate All Logs
+                    </UButton>
+                </template>
+            </UModal>
 
             <!-- Security Section -->
             <div class="my-8">
@@ -425,6 +467,23 @@ const storageForm = reactive({
 })
 const savingStorage = ref(false)
 const { fetchApi } = useCherryApi()
+
+// Truncate Logs Logic
+const confirmTruncateModalOpen = ref(false)
+const truncatingLogs = ref(false)
+
+const truncateLogs = async () => {
+    truncatingLogs.value = true
+    try {
+        await fetchApi('/api/system/truncate-logs', { method: 'POST', skipProject: true })
+        toast.add({ title: 'Success', description: 'All logs have been truncated', color: 'success' })
+        confirmTruncateModalOpen.value = false
+    } catch (e) {
+        toast.add({ title: 'Error', description: 'Failed to truncate logs', color: 'error' })
+    } finally {
+        truncatingLogs.value = false
+    }
+}
 
 // Password Change Logic
 const passwordForm = reactive({

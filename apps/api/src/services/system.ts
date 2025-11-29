@@ -1,6 +1,7 @@
 import { sql, eq } from "drizzle-orm";
 import { db } from "../db";
 import { systemSettings } from "../db/schema";
+import { partitioningService } from "./partitioning";
 
 const CURRENT_VERSION = process.env.APP_VERSION || "0.0.1";
 
@@ -91,5 +92,23 @@ export const systemService = {
     fetch(config.updateWebhook, { headers }).catch(err => console.error("Webhook failed", err));
 
     return { status: "updating", message: "Update sequence started" };
+  },
+
+  async truncateLogs() {
+    console.log("🚀 Truncating all logs...");
+
+    if (await partitioningService.isPartitionedLogsTable()) {
+      const partitions = await partitioningService.listLeafPartitions();
+      for (const partition of partitions) {
+        await partitioningService.dropPartition(partition.name);
+      }
+      // Re-create partitions for today/tomorrow
+      await partitioningService.warmupPartitions();
+    }
+
+    // Truncate the main table (or what's left of it)
+    await db.execute(sql`TRUNCATE TABLE logs CASCADE`);
+
+    return { status: "success", message: "All logs truncated" };
   }
 };
