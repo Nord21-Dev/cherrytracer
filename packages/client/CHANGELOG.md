@@ -1,5 +1,11 @@
 # cherrytracer
 
+## 0.0.12
+
+### Patch Changes
+
+- b9dda11: Implemented error hook & log truncate function
+
 ## 0.0.11
 
 ### Patch Changes
