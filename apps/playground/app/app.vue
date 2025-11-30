@@ -58,6 +58,22 @@
                     </div>
                 </div>
 
+                <!-- Business Scenarios -->
+                <div class="card">
+                    <h3 class="card-title">Business Scenarios</h3>
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <button @click="sim.signupFlow()" class="btn btn-primary" data-tooltip="Simulates a user signup flow with events and traces">
+                            <span>User Signup Flow</span>
+                            <span class="meta">Events + Trace</span>
+                        </button>
+
+                        <button @click="sim.subscriptionUpgrade()" class="btn btn-success" data-tooltip="Simulates a high-value subscription upgrade">
+                            <span>Subscription Upgrade</span>
+                            <span class="meta">$$$ Event</span>
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Load Testing -->
                 <div class="card">
                     <h3 class="card-title">Load & Server</h3>

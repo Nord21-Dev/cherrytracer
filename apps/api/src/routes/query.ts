@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia";
 import { jwt } from "@elysiajs/jwt";
 import { db } from "../db";
-import { logs, projects, logGroups } from "../db/schema";
+import { logs, projects, logGroups, events } from "../db/schema";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 
 export const queryRoutes = new Elysia()
@@ -90,7 +90,7 @@ export const queryRoutes = new Elysia()
             source: logs.source,
             message: logs.message,
             traceId: logs.traceId,
-            isCritical: sql<boolean>`(${logs.data}->>'error_source') = 'auto_captured'`
+            isCritical: sql<boolean>`(${logs.data}->>'error_source' = 'auto_captured')`
         };
 
         if (needsFullData) {
@@ -107,7 +107,7 @@ export const queryRoutes = new Elysia()
 
         const hasNextPage = rows.length > limitValue;
         const page = hasNextPage ? rows.slice(0, limitValue) : rows;
-        const lastRow = page.at(-1);
+        const lastRow = page.length ? page[page.length - 1] : undefined;
         const nextCursor = hasNextPage && lastRow
             ? `${lastRow.timestamp.toISOString()}|${lastRow.id}`
             : null;
@@ -156,8 +156,146 @@ export const queryRoutes = new Elysia()
                 isCritical: ((row.data as Record<string, any> | null)?.error_source) === 'auto_captured'
             }
         };
+    })
+    .get("/events", async ({ query }) => {
+        const {
+            project_id, limit = "50", cursor,
+            search, start_date, end_date, trace_id, filters,
+            exclude_system_events
+        } = query;
+
+        const conditions = [eq(events.projectId, project_id)];
+        const needsFullData = Boolean(trace_id);
+
+        if (exclude_system_events === 'true') {
+            // Hide tracer-emitted span lifecycle events by default
+            conditions.push(sql`${events.data}->>'span_event' IS NULL`);
+        }
+
+        if (trace_id) conditions.push(eq(events.traceId, trace_id));
+        if (start_date) conditions.push(gte(events.timestamp, new Date(start_date)));
+        if (end_date) conditions.push(lte(events.timestamp, new Date(end_date)));
+        if (search) {
+            conditions.push(sql`to_tsvector('simple', ${events.message}) @@ plainto_tsquery('simple', ${search})`);
+        }
+
+        if (filters) {
+            try {
+                const parsed = JSON.parse(filters) as Record<string, string>;
+                for (const [key, value] of Object.entries(parsed)) {
+                    if (key === 'eventType') {
+                        conditions.push(eq(events.eventType, value));
+                    } else if (key === 'userId') {
+                        conditions.push(eq(events.userId, value));
+                    } else if (key === 'sessionId') {
+                        conditions.push(eq(events.sessionId, value));
+                    } else if (key === 'value') {
+                        const numValue = parseFloat(value);
+                        if (!isNaN(numValue)) {
+                            conditions.push(eq(events.value, numValue.toString()));
+                        }
+                    } else if (key.startsWith('data.')) {
+                        const jsonKey = key.slice(5);
+                        const filterJson = { [jsonKey]: value };
+                        conditions.push(sql`${events.data} @> ${JSON.stringify(filterJson)}::jsonb`);
+                    }
+                }
+            } catch (e) {
+                // Ignore invalid JSON
+            }
+        }
+
+        // Keyset pagination to avoid OFFSET scans
+        if (cursor) {
+            const [cursorTs, cursorId] = cursor.split("|");
+            if (cursorTs && cursorId) {
+                const cursorDate = new Date(cursorTs);
+                if (!isNaN(cursorDate.getTime())) {
+                    conditions.push(sql`(${events.timestamp} < ${cursorDate} OR (${events.timestamp} = ${cursorDate} AND ${events.id} < ${cursorId}))`);
+                }
+            }
+        }
+
+        const limitValue = Math.min(Math.max(parseInt(limit), 1), 1000);
+
+        const selectShape: Record<string, any> = {
+            id: events.id,
+            timestamp: events.timestamp,
+            source: events.source,
+            message: events.message,
+            traceId: events.traceId,
+            eventType: events.eventType,
+            userId: events.userId,
+            sessionId: events.sessionId,
+            value: events.value,
+            isError: sql<boolean>`${events.eventType} = 'error'`
+        };
+
+        if (needsFullData) {
+            selectShape.data = events.data;
+            selectShape.spanId = events.spanId;
+        }
+
+        const rows = await db.select(selectShape)
+            .from(events)
+            .where(and(...conditions))
+            // Fetch an extra row to build next cursor cheaply
+            .limit(limitValue + 1)
+            .orderBy(desc(events.timestamp), desc(events.id));
+
+        const hasNextPage = rows.length > limitValue;
+        const page = hasNextPage ? rows.slice(0, limitValue) : rows;
+        const lastRow = page.length ? page[page.length - 1] : undefined;
+        const nextCursor = hasNextPage && lastRow
+            ? `${lastRow.timestamp.toISOString()}|${lastRow.id}`
+            : null;
+
+        return { data: page, nextCursor };
     }, {
-        detail: { tags: ["Query"], summary: "Fetch Log Detail" },
+        detail: { tags: ["Query"], summary: "Fetch Events" },
+        query: t.Object({
+            project_id: t.String(),
+            limit: t.Optional(t.String()),
+            cursor: t.Optional(t.String()),
+            search: t.Optional(t.String()),
+            start_date: t.Optional(t.String()),
+            end_date: t.Optional(t.String()),
+            trace_id: t.Optional(t.String()),
+            filters: t.Optional(t.String()), // JSON string of Record<string, string>
+            exclude_system_events: t.Optional(t.String())
+        })
+    })
+    .get("/events/:id", async ({ params, query, set }) => {
+        const { id } = params;
+        const { project_id } = query;
+
+        const row = await db.query.events.findFirst({
+            where: and(eq(events.id, id), eq(events.projectId, project_id))
+        });
+
+        if (!row) {
+            set.status = 404;
+            return { error: "Event not found" };
+        }
+
+        return {
+            data: {
+                id: row.id,
+                timestamp: row.timestamp,
+                source: row.source,
+                message: row.message,
+                traceId: row.traceId,
+                spanId: row.spanId,
+                eventType: row.eventType,
+                userId: row.userId,
+                sessionId: row.sessionId,
+                value: row.value,
+                data: row.data,
+                isError: row.eventType === 'error'
+            }
+        };
+    }, {
+        detail: { tags: ["Query"], summary: "Fetch Event Detail" },
         params: t.Object({ id: t.String() }),
         query: t.Object({ project_id: t.String() })
     })
@@ -226,7 +364,7 @@ export const queryRoutes = new Elysia()
     .get("/groups", async ({ query }) => {
         const {
             project_id, limit = "50", offset = "0", sort = "last_seen",
-            level, exclude_system_events, error_source, crash_only
+            level, exclude_system_events, error_source, crash_only, filters
         } = query;
 
         const conditions = [eq(logGroups.projectId, project_id)];
@@ -258,6 +396,32 @@ export const queryRoutes = new Elysia()
             )`);
         }
 
+        if (filters) {
+            try {
+                const parsed = JSON.parse(filters) as Record<string, string>;
+                for (const [key, value] of Object.entries(parsed)) {
+                    if (key.startsWith('data.')) {
+                        const jsonKey = key.slice(5);
+                        const filterJson = { [jsonKey]: value };
+                        // We need to check if ANY log in the group matches the filter
+                        // This is expensive but correct.
+                        // Alternatively, if we assume all logs in a group share the same structure (which they should for 'type'),
+                        // we can check one.
+                        // But wait, 'type' is not in logGroups table. It's in logs.
+                        // So we must join or exists.
+                        conditions.push(sql`EXISTS (
+                            SELECT 1 FROM ${logs} as source
+                            WHERE source.project_id = ${logGroups.projectId}
+                              AND source.fingerprint = ${logGroups.fingerprint}
+                              AND source.data @> ${JSON.stringify(filterJson)}::jsonb
+                        )`);
+                    }
+                }
+            } catch (e) {
+                // Ignore invalid JSON
+            }
+        }
+
         const orderBy = sort === "count" ? desc(logGroups.count) : desc(logGroups.lastSeen);
 
         const data = await db.select()
@@ -278,6 +442,7 @@ export const queryRoutes = new Elysia()
             level: t.Optional(t.String()),
             exclude_system_events: t.Optional(t.String()),
             error_source: t.Optional(t.String()),
-            crash_only: t.Optional(t.String())
+            crash_only: t.Optional(t.String()),
+            filters: t.Optional(t.String())
         })
     });

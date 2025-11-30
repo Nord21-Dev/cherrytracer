@@ -4,12 +4,13 @@ import { ingestQueue } from "../queue";
 import { checkReferrer } from "../services/referrer";
 
 type LogEventPayload = {
-  level: string;
+  level?: string;
   message: string;
   traceId?: string;
   spanId?: string;
   data?: Record<string, any>;
   timestamp?: string;
+  type?: string;
 };
 
 type EnvelopePayload = {
@@ -20,13 +21,14 @@ type EnvelopePayload = {
 type IncomingBody = LogEventPayload | LogEventPayload[] | EnvelopePayload;
 
 const logSchema = t.Object({
-  level: t.String(),
+  level: t.Optional(t.String()),
   message: t.String(),
   traceId: t.Optional(t.String()),
   spanId: t.Optional(t.String()),
   data: t.Optional(t.Any()),
-  timestamp: t.Optional(t.String())
-});
+  timestamp: t.Optional(t.String()),
+  type: t.Optional(t.String())
+}, { additionalProperties: true });
 
 const envelopeSchema = t.Object({
   projectId: t.Optional(t.String()),
@@ -120,14 +122,15 @@ export const ingestRoutes = new Elysia({ prefix: "/ingest" })
 
     let accepted = 0;
     for (const event of events) {
+      const isEvent = event.type === 'event';
       const ok = ingestQueue.add({
         projectId,
         source: keyType === "browser" ? "browser" : "server",
         traceId: event.traceId || null,
         spanId: event.spanId || null,
-        level: event.level || "info",
+        level: isEvent ? undefined : (event.level || "info"),
         message: event.message || "",
-        data: event.data || {},
+        data: { ...(event.data || {}), type: event.type },
         timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
       });
 

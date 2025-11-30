@@ -95,7 +95,7 @@ export class Cherrytracer {
    * Add a log to the queue
    * Automatically inherits context from active span if not explicitly provided
    */
-  private emit(level: LogLevel, message: string, data: any = {}, traceId?: string, spanId?: string) {
+  private emit(level: LogLevel, message: string, data: any = {}, traceId?: string, spanId?: string, type: "log" | "event" = "log", eventFields?: { eventType?: string; userId?: string; sessionId?: string; value?: number }) {
     if (!this.config.enabled) return;
 
     // GOD MODE: Auto-inject active span context if not explicitly provided
@@ -113,12 +113,20 @@ export class Cherrytracer {
       : { ...this.baseContext, ...data };
 
     const entry: LogEvent = {
-      level,
+      level: type === "log" ? level : undefined,
       message,
       traceId,
       spanId,
       timestamp: new Date().toISOString(),
       data: scrubbedData,
+      type,
+      // Add event-specific fields if provided
+      ...(eventFields && {
+        eventType: eventFields.eventType,
+        userId: eventFields.userId,
+        sessionId: eventFields.sessionId,
+        value: eventFields.value
+      })
     };
 
     this.queue.push(entry);
@@ -133,6 +141,27 @@ export class Cherrytracer {
   public warn(message: string, data?: any) { this.emit("warn", message, data); }
   public error(message: string, data?: any) { this.emit("error", message, data); }
   public debug(message: string, data?: any) { this.emit("debug", message, data); }
+
+  /**
+   * Track a business event with structured data
+   */
+  public track(eventName: string, properties?: {
+    eventType?: string;
+    userId?: string;
+    sessionId?: string;
+    value?: number;
+    [key: string]: any;
+  }) {
+    // Extract event-specific fields
+    const { eventType, userId, sessionId, value, ...otherProperties } = properties || {};
+
+    this.emit("info", eventName, otherProperties, undefined, undefined, "event", {
+      eventType,
+      userId,
+      sessionId,
+      value
+    });
+  }
 
   /**
    * Trace / Spans
