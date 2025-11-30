@@ -1,5 +1,11 @@
 # api
 
+## 0.0.23
+
+### Patch Changes
+
+- 2c628ea: Added analytics and improved context
+
 ## 0.0.22
 
 ### Patch Changes

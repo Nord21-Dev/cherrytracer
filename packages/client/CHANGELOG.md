@@ -1,5 +1,11 @@
 # cherrytracer
 
+## 0.0.13
+
+### Patch Changes
+
+- 2c628ea: Added analytics and improved context
+
 ## 0.0.12
 
 ### Patch Changes
