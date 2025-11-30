@@ -1,7 +1,7 @@
 <template>
     <!-- Top Navigation Bar -->
     <header
-        class="sticky top-0 z-50 border-b border-gray-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl">
+        class="sticky top-0 z-50 border-b border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl">
         <UContainer class="flex items-center justify-between py-4">
             <div class="flex items-center gap-4">
                 <UButton icon="i-lucide-arrow-left" variant="ghost" color="neutral" to="/logs" label="Back to Logs"
@@ -12,7 +12,7 @@
                 <span class="text-xs text-neutral-500 dark:text-neutral-500 font-medium">Trace ID</span>
                 <UTooltip text="Click to copy" :shortcuts="['⌘', 'C']">
                     <UBadge variant="subtle" color="neutral" size="md"
-                        class="font-mono cursor-copy hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors group"
+                        class="font-mono cursor-copy hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors group"
                         @click="copyToClipboard(traceId)">
                         {{ traceId }}
                         <UIcon name="i-lucide-copy"
@@ -30,42 +30,36 @@
         <!-- KPI / Header Section -->
         <section class="flex flex-row items-center md:flex-row md:items-end justify-between gap-6">
             <div>
-                <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-1">Trace Details</h2>
-                <p v-if="logs.length" class="text-sm text-gray-500">
+                <h2 class="text-2xl font-semibold text-neutral-900 dark:text-white mb-1">Trace Details</h2>
+                <p v-if="logs.length" class="text-sm text-neutral-500">
                     Started at {{ formatTime(logs[logs.length - 1]?.timestamp || '') }}
                 </p>
             </div>
 
             <!-- The "Grok" Metric Card -->
             <div class="flex items-end flex-col">
-                <div class="text-[8px] uppercase tracking-widest text-gray-500 dark:text-neutral-500 font-bold">
+                <div class="text-[8px] uppercase tracking-widest text-neutral-500 dark:text-neutral-500 font-bold">
                     Total
                     Latency</div>
                 <div class="flex items-baseline gap-1">
                     <span class="text-xl font-mono font-bold text-primary-500 tracking-tighter">
                             {{ pending ? '---' : formattedTotalDuration.value }}
                     </span>
-                        <span class="text-sm text-gray-500 dark:text-neutral-500 font-medium">
+                        <span class="text-sm text-neutral-500 dark:text-neutral-500 font-medium">
                             {{ formattedTotalDuration.unit }}
                         </span>
                 </div>
             </div>
         </section>
 
-        <!-- Loading State -->
-        <div v-if="pending" class="space-y-4">
-            <USkeleton class="h-64 w-full rounded-xl bg-gray-200 dark:bg-neutral-900" />
-            <USkeleton class="h-48 w-full rounded-xl bg-gray-200 dark:bg-neutral-900" />
-        </div>
-
         <!-- Empty State -->
-        <div v-else-if="!logs.length"
-            class="flex flex-col items-center justify-center py-32 rounded-xl border border-dashed border-gray-300 dark:border-neutral-800 bg-gray-100/20 dark:bg-neutral-900/20">
-            <div class="p-4 rounded-full bg-gray-200 dark:bg-neutral-900 mb-4">
-                <UIcon name="i-lucide-search-x" class="size-8 text-gray-500 dark:text-neutral-500" />
+        <div v-if="!logs.length"
+            class="flex flex-col items-center justify-center py-32 rounded-xl border border-dashed border-neutral-300 dark:border-neutral-800 bg-neutral-100/20 dark:bg-neutral-900/20">
+            <div class="p-4 rounded-full bg-neutral-200 dark:bg-neutral-900 mb-4">
+                <UIcon name="i-lucide-search-x" class="size-8 text-neutral-500 dark:text-neutral-500" />
             </div>
-            <h3 class="text-gray-900 dark:text-white font-medium">No Data Found</h3>
-            <p class="text-gray-500 dark:text-neutral-500 text-sm mt-1">
+            <h3 class="text-neutral-900 dark:text-white font-medium">No Data Found</h3>
+            <p class="text-neutral-500 dark:text-neutral-500 text-sm mt-1">
                 Could not find any logs for Trace ID: <span class="font-mono">{{ traceId }}</span>
             </p>
             <UButton label="Go Back" to="/" variant="outline" class="mt-4" />
@@ -78,8 +72,8 @@
                 <template #header>
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                            <UIcon name="i-lucide-align-left" class="text-gray-600 dark:text-neutral-400" />
-                            <h3 class="text-sm font-medium text-gray-900 dark:text-white">Waterfall View</h3>
+                            <UIcon name="i-lucide-align-left" class="text-neutral-600 dark:text-neutral-400" />
+                            <h3 class="text-sm font-medium text-neutral-900 dark:text-white">Waterfall View</h3>
                         </div>
                         <UBadge variant="soft" color="neutral" size="xs">{{ spans.length }} Spans</UBadge>
                     </div>
@@ -89,23 +83,23 @@
 
                     <!-- The "Initialization/Overhead" Gray Zone -->
                     <div v-if="preparedSpans.length && preparedSpans[0].offsetPercent > 0"
-                        class="absolute top-0 bottom-0 left-0 bg-gray-100/50 dark:bg-neutral-800/30 border-r border-dashed border-gray-300 dark:border-neutral-700 z-0"
+                        class="absolute top-0 bottom-0 left-0 bg-neutral-100/50 dark:bg-neutral-800/30 border-r border-dashed border-neutral-300 dark:border-neutral-700 z-0"
                         :style="{ width: `${preparedSpans[0].offsetPercent}%` }">
                         <div
-                            class="sticky top-10 px-2 text-[9px] font-mono text-gray-400 uppercase tracking-widest rotate-90 origin-left translate-x-full whitespace-nowrap">
+                            class="sticky top-10 px-2 text-[9px] font-mono text-neutral-400 uppercase tracking-widest rotate-90 origin-left translate-x-full whitespace-nowrap">
                             Initial Latency
                         </div>
                     </div>
 
                     <!-- Timeline Ruler -->
                     <div
-                        class="h-8 border-b border-gray-200 dark:border-neutral-800 select-none bg-gray-50/50 dark:bg-neutral-950/50 backdrop-blur flex items-end px-2 pb-1">
+                        class="h-8 border-b border-neutral-200 dark:border-neutral-800 select-none bg-neutral-50/50 dark:bg-neutral-950/50 backdrop-blur flex items-end px-2 pb-1">
 
                         <!-- 1. Invisible Spacer (Matches the Span Label Column exactly) -->
                         <!-- Must have same width/margin as the span rows: w-1/4 min-w-[200px] mr-4 -->
                         <div class="w-1/4 min-w-[120px] mr-4 border-r border-transparent">
                             <span
-                                class="text-[10px] font-medium text-gray-400 dark:text-neutral-600 uppercase tracking-wider">
+                                class="text-[10px] font-medium text-neutral-400 dark:text-neutral-600 uppercase tracking-wider">
                                 Operation
                             </span>
                         </div>
@@ -115,7 +109,7 @@
 
                             <!-- Labels -->
                             <div
-                                class="absolute inset-x-0 bottom-0 flex justify-between text-[10px] font-mono text-gray-500 dark:text-neutral-500 leading-none z-10">
+                                class="absolute inset-x-0 bottom-0 flex justify-between text-[10px] font-mono text-neutral-500 dark:text-neutral-500 leading-none z-10">
                                 <!-- Using translate-x to center the middle labels and keep ends aligned -->
                                 <span>0ms</span>
                                 <span class="-translate-x-1/2">{{ Math.round(totalDuration * 0.25) }}ms</span>
@@ -130,18 +124,18 @@
                                 class="absolute top-8 left-0 w-full h-[9999px] pointer-events-none z-0 opacity-10 mix-blend-multiply dark:mix-blend-overlay">
                                 <div class="w-full h-full flex justify-between">
                                     <!-- Start Line -->
-                                    <div class="w-px border-l border-gray-900 dark:border-white"></div>
+                                    <div class="w-px border-l border-neutral-900 dark:border-white"></div>
                                     <!-- Quarter -->
-                                    <div class="w-px border-l border-dashed border-gray-400 dark:border-neutral-400">
+                                    <div class="w-px border-l border-dashed border-neutral-400 dark:border-neutral-400">
                                     </div>
                                     <!-- Middle -->
-                                    <div class="w-px border-l border-dashed border-gray-400 dark:border-neutral-400">
+                                    <div class="w-px border-l border-dashed border-neutral-400 dark:border-neutral-400">
                                     </div>
                                     <!-- Three Quarter -->
-                                    <div class="w-px border-l border-dashed border-gray-400 dark:border-neutral-400">
+                                    <div class="w-px border-l border-dashed border-neutral-400 dark:border-neutral-400">
                                     </div>
                                     <!-- End Line -->
-                                    <div class="w-px border-l border-gray-900 dark:border-white"></div>
+                                    <div class="w-px border-l border-neutral-900 dark:border-white"></div>
                                 </div>
                             </div>
                         </div>
@@ -150,7 +144,7 @@
                     <!-- Spans List -->
                     <div class="py-4 space-y-1 relative min-h-[100px]">
                         <div v-for="span in preparedSpans" :key="span.id"
-                            class="group relative flex items-center px-2 py-1 hover:bg-gray-100/50 dark:hover:bg-white/2 transition-none">
+                            class="group relative flex items-center px-2 py-1 hover:bg-neutral-100/50 dark:hover:bg-white/2 transition-none">
                             <!-- Span Label -->
                             <div class="w-1/4 min-w-[120px] pr-1 flex flex-col truncate  mr-4">
                                 <div class="flex items-center gap-2">
@@ -158,12 +152,12 @@
                                         :class="span.active ? 'bg-amber-400 text-amber-400' : span.error ? 'bg-red-500 text-red-500' : 'bg-emerald-500 text-emerald-500'">
                                     </div>
                                     <span
-                                        class="text-xs font-medium text-gray-700 dark:text-neutral-300 truncate group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+                                        class="text-xs font-medium text-neutral-700 dark:text-neutral-300 truncate group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
                                         {{ span.name }}
                                     </span>
                                     <UBadge v-if="span.active" variant="soft" color="warning" size="xs">In Flight</UBadge>
                                 </div>
-                                <span class="text-[10px] font-mono text-gray-600 dark:text-neutral-600 pl-3.5">{{
+                                <span class="text-[10px] font-mono text-neutral-600 dark:text-neutral-600 pl-3.5">{{
                                     span.id.slice(0,
                                         8) }}...</span>
                                 <div v-if="span.relatedTraceId"
@@ -184,7 +178,7 @@
                                                 ? 'bg-amber-200 dark:bg-amber-500/40 border border-amber-300 dark:border-amber-400 animate-pulse'
                                                 : span.error
                                                     ? 'bg-red-500/80 border border-red-500'
-                                                    : 'bg-gray-300 dark:bg-neutral-700 border border-gray-400 dark:border-neutral-600 group-hover:bg-primary-500 group-hover:border-primary-400',
+                                                    : 'bg-neutral-300 dark:bg-neutral-700 border border-neutral-400 dark:border-neutral-600 group-hover:bg-primary-500 group-hover:border-primary-400',
                                             span.relatedTraceId ? 'cursor-pointer ring-1 ring-primary-300/60 dark:ring-primary-500/30' : 'cursor-crosshair'
                                         ]" :style="{
                                                 left: `${span.offsetPercent}%`,
@@ -196,20 +190,21 @@
                                             <span class="hidden sm:inline">Jump</span>
                                         </div>
 
-                                        <div v-if="span.showLogMarkers && span.logMarkers.length"
+                                        <div v-if="span.showMarkers && span.markers.length"
                                             class="absolute inset-0 pointer-events-none">
-                                            <div v-for="marker in span.logMarkers" :key="marker.id"
+                                            <div v-for="marker in span.markers" :key="marker.id"
                                                 class="absolute -top-2 pointer-events-auto -translate-x-1.5"
                                                 :style="{ left: `${marker.offsetPercent}%` }">
                                                 <UTooltip :text="markerTooltip(marker)"
                                                     :delay-duration="0"
                                                     :popper="{ placement: 'top' }">
                                                     <button type="button"
-                                                        class="relative size-3 rounded-full border shadow-sm shadow-black/10 dark:shadow-black/30 ring-2 ring-white/60 dark:ring-black/30 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                                                        :class="markerToneClass(marker.level)"
+                                                        class="relative size-3 flex items-center justify-center border shadow-sm shadow-black/10 dark:shadow-black/30 ring-2 ring-white dark:ring-black/30 focus:outline-none focus:ring-2 focus:ring-primary-500 origin-center"
+                                                        :class="[markerToneClass(marker), marker.kind === 'event' ? 'rotate-45 rounded-[2px] -translate-y-2' : 'rounded-full translate-y-1.5']"
                                                         @click.stop="handleMarkerClick(marker)">
                                                         <span v-if="marker.count > 1"
-                                                            class="absolute -top-3 -right-1 text-[9px] font-semibold text-gray-700 dark:text-neutral-200 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-full px-1 leading-none">
+                                                            class="absolute -top-3 -right-1 text-[9px] font-semibold text-neutral-700 dark:text-neutral-200 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-full px-1 leading-none"
+                                                            :class="marker.kind === 'event' ? '-rotate-45' : ''">
                                                             {{ marker.count }}
                                                         </span>
                                                     </button>
@@ -222,13 +217,13 @@
                                 <div class="absolute flex items-center gap-2"
                                     :style="{ left: `calc(${span.offsetPercent + span.widthPercent}% + 8px)` }">
                                     <span
-                                        class="text-[10px] font-mono text-gray-600 dark:text-neutral-600 ml-2 pointer-events-none transition-all opacity-0 group-hover:opacity-100">
+                                        class="text-[10px] font-mono text-neutral-600 dark:text-neutral-600 ml-2 pointer-events-none transition-all opacity-0 group-hover:opacity-100">
                                         {{ span.active ? `${formatLatencyLabel(span.duration)} (live)` : formatLatencyLabel(span.duration) }}
                                     </span>
-                                    <UButton v-if="span.logMarkers.length > LOG_MARKER_COLLAPSE_THRESHOLD" size="xs"
+                                    <UButton v-if="span.markers.length > MARKER_COLLAPSE_THRESHOLD" size="xs"
                                         color="neutral" variant="ghost" class="text-[10px]! px-2!"
-                                        @click.stop="toggleSpanMarkers(span.id, !span.showLogMarkers)">
-                                        {{ span.showLogMarkers ? 'Hide log markers' : `Show ${span.logMarkers.length} logs` }}
+                                        @click.stop="toggleSpanMarkers(span.id, !span.showMarkers)">
+                                        {{ span.showMarkers ? 'Hide markers' : `Show ${span.markers.length} markers` }}
                                     </UButton>
                                 </div>
                             </div>
@@ -251,7 +246,7 @@
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
                             <UIcon name="i-lucide-terminal" class="text-neutral-500 dark:text-neutral-500" />
-                            <h3 class="text-sm font-medium text-gray-800 dark:text-neutral-200">System Events
+                            <h3 class="text-sm font-medium text-neutral-800 dark:text-neutral-200">Logs
                             </h3>
                         </div>
                         <!-- Active Badge selection -->
@@ -271,25 +266,25 @@
                 <div class="font-mono text-xs">
                     <table class="w-full text-left border-collapse">
                         <thead
-                            class="bg-gray-50/50 dark:bg-white/2 text-gray-500 dark:text-neutral-500 sticky top-0 z-10 backdrop-blur-sm">
+                            class="bg-neutral-50/50 dark:bg-white/2 text-neutral-500 dark:text-neutral-500 sticky top-0 z-10 backdrop-blur-sm">
                             <tr>
-                                <th class="px-4 py-2 font-medium w-32 border-b border-gray-200 dark:border-neutral-800">
+                                <th class="px-4 py-2 font-medium w-32 border-b border-neutral-200 dark:border-neutral-800">
                                     Timestamp
                                 </th>
-                                <th class="px-4 py-2 font-medium w-24 border-b border-gray-200 dark:border-neutral-800">
+                                <th class="px-4 py-2 font-medium w-24 border-b border-neutral-200 dark:border-neutral-800">
                                     Level</th>
-                                <th class="px-4 py-2 font-medium border-b border-gray-200 dark:border-neutral-800">
+                                <th class="px-4 py-2 font-medium border-b border-neutral-200 dark:border-neutral-800">
                                     Message</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-200 dark:divide-neutral-800/50">
+                        <tbody class="divide-y divide-neutral-200 dark:divide-neutral-800/50">
                             <tr v-for="log in logs" :key="log.id" :ref="el => setLogRowRef(log.id, el as HTMLElement | null)"
                                 class="group transition-colors"
                                 :class="highlightedLogId === log.id
                                     ? 'bg-primary-50/70 dark:bg-primary-900/30 shadow-[0_0_0_2px_rgba(59,130,246,0.35)] dark:shadow-[0_0_0_2px_rgba(14,165,233,0.45)]'
-                                    : 'hover:bg-gray-100/30 dark:hover:bg-white/3'">
+                                    : 'hover:bg-neutral-100/30 dark:hover:bg-white/3'">
                                 <td
-                                    class="px-4 py-2 text-gray-500 dark:text-neutral-500 whitespace-nowrap group-hover:text-gray-700 dark:group-hover:text-neutral-300">
+                                    class="px-4 py-2 text-neutral-500 dark:text-neutral-500 whitespace-nowrap group-hover:text-neutral-700 dark:group-hover:text-neutral-300">
                                     {{ formatTime(log.timestamp) }}
                                 </td>
                                 <td class="px-4 py-2">
@@ -298,7 +293,7 @@
                                         {{ log.level }}
                                     </UBadge>
                                 </td>
-                                <td class="px-4 py-2 text-gray-700 dark:text-neutral-300 break-all">
+                                <td class="px-4 py-2 text-neutral-700 dark:text-neutral-300 break-all">
                                     {{ log.message }}
                                     <div v-if="log.data && Object.keys(log.data).length > 0"
                                         class="mt-1 opacity-50 text-[10px]">
@@ -333,7 +328,7 @@ const DURATION_UNITS = [
 ] as const
 
 const DEFAULT_DURATION_UNIT = DURATION_UNITS[DURATION_UNITS.length - 1]!
-const LOG_MARKER_COLLAPSE_THRESHOLD = 120
+const MARKER_COLLAPSE_THRESHOLD = 120
 const MAX_MARKERS_PER_SPAN = 180
 const MIN_TRACE_ID_LENGTH = 8
 const ACTIVE_POLL_INTERVAL_MS = 3_000
@@ -345,14 +340,27 @@ const LEVEL_PRIORITY: Record<LogEntry['level'], number> = {
     debug: 0
 }
 
+interface TraceEventEntry {
+    id: string
+    timestamp: string
+    message: string
+    eventType?: string | null
+    spanId?: string | null
+    traceId?: string | null
+    data?: Record<string, any>
+}
+
 interface SpanMarker {
     id: string
     logId: string | null
+    eventId: string | null
     ts: number
-    level: LogEntry['level']
+    level?: LogEntry['level']
+    eventType?: string | null
     message: string
     count: number
     offsetPercent: number
+    kind: 'log' | 'event'
 }
 
 interface SpanAggregate {
@@ -361,6 +369,7 @@ interface SpanAggregate {
     end: number | null
     lastSeen: number | null
     logs: LogEntry[]
+    events: TraceEventEntry[]
     error: boolean
     name: string
     hasEndEvent: boolean
@@ -378,8 +387,8 @@ interface SpanWithTimes extends SpanAggregate {
 interface PreparedSpan extends SpanWithTimes {
     offsetPercent: number
     widthPercent: number
-    logMarkers: SpanMarker[]
-    showLogMarkers: boolean
+    markers: SpanMarker[]
+    showMarkers: boolean
 }
 
 const resolveDurationUnit = (absMs: number): (typeof DURATION_UNITS)[number] => {
@@ -487,10 +496,10 @@ const truncateMessage = (message: string, max = 140) => {
     return message.length > max ? `${message.slice(0, max - 3)}...` : message
 }
 
-const buildLogMarkers = (span: SpanWithTimes): SpanMarker[] => {
+const buildSpanMarkers = (span: SpanWithTimes): SpanMarker[] => {
     if (!span.duration) return []
 
-    const rawMarkers = span.logs
+    const logMarkers = span.logs
         .map((log) => {
             const ts = new Date(log.timestamp).getTime()
             if (!Number.isFinite(ts)) return null
@@ -500,14 +509,39 @@ const buildLogMarkers = (span: SpanWithTimes): SpanMarker[] => {
             return {
                 id: log.id,
                 logId: log.id,
+                eventId: null,
                 ts,
                 level: log.level,
                 message: log.message,
                 offsetPercent: clampPercent(offsetPercent),
-                count: 1
+                count: 1,
+                kind: 'log' as const
             } as SpanMarker
         })
         .filter(Boolean) as SpanMarker[]
+
+    const eventMarkers = span.events
+        .map((event) => {
+            const ts = new Date(event.timestamp).getTime()
+            if (!Number.isFinite(ts)) return null
+
+            const offsetPercent = ((ts - span.start) / span.duration) * 100
+
+            return {
+                id: event.id,
+                logId: null,
+                eventId: event.id,
+                ts,
+                eventType: event.eventType,
+                message: event.message,
+                offsetPercent: clampPercent(offsetPercent),
+                count: 1,
+                kind: 'event' as const
+            } as SpanMarker
+        })
+        .filter(Boolean) as SpanMarker[]
+
+    const rawMarkers = [...logMarkers, ...eventMarkers]
 
     if (rawMarkers.length <= MAX_MARKERS_PER_SPAN) {
         return rawMarkers
@@ -515,7 +549,7 @@ const buildLogMarkers = (span: SpanWithTimes): SpanMarker[] => {
 
     const bucketCount = MAX_MARKERS_PER_SPAN
     const bucketSizeMs = span.duration / bucketCount || 1
-    const buckets = new Map<number, SpanMarker & { highestLevel: LogEntry['level'] }>()
+    const buckets = new Map<number, SpanMarker & { highestLevel: LogEntry['level'] | null, logCount: number, eventCount: number }>()
 
     rawMarkers.forEach((marker) => {
         const bucketIndex = Math.min(
@@ -530,20 +564,35 @@ const buildLogMarkers = (span: SpanWithTimes): SpanMarker[] => {
                 id: `bucket-${span.id}-${bucketIndex}`,
                 count: 1,
                 offsetPercent: clampPercent((((bucketIndex + 0.5) * bucketSizeMs) / span.duration) * 100),
-                highestLevel: marker.level
+                highestLevel: marker.kind === 'log' ? (marker.level ?? 'info') : null,
+                logCount: marker.kind === 'log' ? 1 : 0,
+                eventCount: marker.kind === 'event' ? 1 : 0
             })
         } else {
             existing.count += 1
-            if (LEVEL_PRIORITY[marker.level] > LEVEL_PRIORITY[existing.highestLevel]) {
-                existing.highestLevel = marker.level
-                existing.level = marker.level
+            existing.logCount += marker.kind === 'log' ? 1 : 0
+            existing.eventCount += marker.kind === 'event' ? 1 : 0
+
+            if (marker.kind === 'log') {
+                const level = marker.level ?? 'info'
+                if (!existing.highestLevel || LEVEL_PRIORITY[level] > LEVEL_PRIORITY[existing.highestLevel]) {
+                    existing.highestLevel = level
+                    existing.level = level
+                    existing.message = marker.message
+                    existing.logId = marker.logId
+                    existing.eventId = marker.eventId
+                    existing.kind = 'log'
+                }
+            } else if (existing.logCount === 0) {
                 existing.message = marker.message
-                existing.logId = marker.logId
+                existing.eventId = marker.eventId
+                existing.kind = 'event'
+                existing.eventType = marker.eventType
             }
         }
     })
 
-    return Array.from(buckets.values()).map(({ highestLevel, ...rest }) => rest)
+    return Array.from(buckets.values()).map(({ highestLevel, logCount, eventCount, ...rest }) => rest)
 }
 
 const spanMarkerVisibility = ref<Record<string, boolean>>({})
@@ -552,7 +601,7 @@ const resolveMarkerVisibility = (spanId: string, markerCount: number) => {
     const userPreference = spanMarkerVisibility.value[spanId]
     if (typeof userPreference === 'boolean') return userPreference
 
-    return markerCount <= LOG_MARKER_COLLAPSE_THRESHOLD
+    return markerCount <= MARKER_COLLAPSE_THRESHOLD
 }
 
 const toggleSpanMarkers = (spanId: string, nextValue?: boolean) => {
@@ -565,8 +614,12 @@ const toggleSpanMarkers = (spanId: string, nextValue?: boolean) => {
     }
 }
 
-const markerToneClass = (level: LogEntry['level']) => {
-    switch (level) {
+const markerToneClass = (marker: SpanMarker) => {
+    if (marker.kind === 'event') {
+        return 'bg-pink-200 border-pink-300 text-pink-700 dark:bg-pink-600 dark:border-pink-500'
+    }
+
+    switch (marker.level) {
         case 'error': return 'bg-error-500 border-error-600'
         case 'warn': return 'bg-warning-500 border-warning-600'
         case 'info': return 'bg-info-500 border-info-600'
@@ -576,10 +629,12 @@ const markerToneClass = (level: LogEntry['level']) => {
 
 const markerTooltip = (marker: SpanMarker) => {
     const tsLabel = format(new Date(marker.ts), 'HH:mm:ss.SSS')
-    const levelLabel = marker.level.toUpperCase()
-    const countSuffix = marker.count > 1 ? ` • ${marker.count} logs` : ''
+    const kindLabel = marker.kind === 'event'
+        ? (marker.eventType ? `EVENT • ${marker.eventType}` : 'EVENT')
+        : (marker.level ? marker.level.toUpperCase() : 'LOG')
+    const countSuffix = marker.count > 1 ? ` • ${marker.count} items` : ''
 
-    return `${tsLabel} • ${levelLabel}${countSuffix} — ${truncateMessage(marker.message, 110)}`
+    return `${tsLabel} • ${kindLabel}${countSuffix} — ${truncateMessage(marker.message, 110)}`
 }
 
 const highlightedLogId = ref<string | null>(null)
@@ -614,6 +669,7 @@ const focusLogRow = async (logId: string) => {
 }
 
 const handleMarkerClick = (marker: SpanMarker) => {
+    if (marker.kind !== 'log') return
     if (!marker.logId) return
     focusLogRow(marker.logId)
 }
@@ -621,18 +677,40 @@ const handleMarkerClick = (marker: SpanMarker) => {
 // --- Data Fetching ---
 const { data: response, status, refresh } = await useAsyncData(
     `trace-${traceId}`,
-    () => fetchApi<{ data: LogEntry[] }>('/api/logs', {
-        params: {
-            trace_id: traceId,
-            limit: 1000 // Fetch a large batch to ensure we get the whole trace
+    async () => {
+        const [logsRes, eventsRes] = await Promise.all([
+            fetchApi<{ data: LogEntry[] }>('/api/logs', {
+                params: {
+                    trace_id: traceId,
+                    limit: 1000 // Fetch a large batch to ensure we get the whole trace
+                }
+            }),
+            fetchApi<{ data: TraceEventEntry[] }>('/api/events', {
+                params: {
+                    trace_id: traceId,
+                    limit: 1000,
+                    include_data: true
+                }
+            })
+        ])
+
+        return {
+            logs: logsRes?.data || [],
+            events: eventsRes?.data || []
         }
-    })
+    }
 )
 
 const pending = computed(() => status.value === 'pending')
 const logs = computed(() => {
     // Sort chronologically just in case API order varies
-    return (response.value?.data || []).sort((a, b) =>
+    return (response.value?.logs || []).sort((a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    )
+})
+
+const traceEvents = computed(() => {
+    return (response.value?.events || []).sort((a, b) =>
         new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     )
 })
@@ -642,6 +720,7 @@ const now = ref(Date.now())
 // --- Span Processing Logic ---
 const spans = computed(() => {
     const raw = logs.value
+    const eventList = traceEvents.value
     const spanMap = new Map()
 
     raw.forEach(log => {
@@ -654,6 +733,7 @@ const spans = computed(() => {
                 end: null as number | null,
                 lastSeen: null as number | null,
                 logs: [],
+                events: [],
                 error: false,
                 name: 'Unknown Operation',
                 hasEndEvent: false,
@@ -710,6 +790,17 @@ const spans = computed(() => {
         }
     })
 
+    eventList.forEach(event => {
+        if (!event.spanId) return
+        const entry = spanMap.get(event.spanId)
+        if (!entry) return
+
+        entry.events.push(event)
+
+        const ts = new Date(event.timestamp).getTime()
+        entry.lastSeen = entry.lastSeen === null ? ts : Math.max(entry.lastSeen, ts)
+    })
+
     // Convert Map to Array and calculate duration
     return Array.from(spanMap.values())
         .filter(s => s.start) // Show spans even if no end event (in-flight)
@@ -732,27 +823,31 @@ const spans = computed(() => {
 })
 
 // --- Metrics ---
-// 1. Anchor the start time to the very first Log, not the first Span.
+// 1. Anchor the start time to the very first log/event, not the first Span.
 //    This preserves the visual "gap" if there is latency before the first span begins.
 const traceStart = computed(() => {
-    if (!logs.value.length) return 0
-    const firstLogTime = new Date(logs.value[0]!.timestamp).getTime()
+    if (!logs.value.length && !traceEvents.value.length) return 0
+    const firstLogTime = logs.value.length ? new Date(logs.value[0]!.timestamp).getTime() : Infinity
+    const firstEventTime = traceEvents.value.length ? new Date(traceEvents.value[0]!.timestamp).getTime() : Infinity
 
-    // Safety check: in rare async cases, a span might claim to start before the first log
+    // Safety check: in rare async cases, a span might claim to start before the first log/event
     const firstSpanTime = spans.value.length ? Math.min(...spans.value.map(s => s.start)) : Infinity
 
-    return Math.min(firstLogTime, firstSpanTime)
+    const candidate = Math.min(firstLogTime, firstSpanTime, firstEventTime)
+
+    return Number.isFinite(candidate) ? candidate : 0
 })
 
-// 2. Calculate total duration based on the absolute last event in the entire log history
+// 2. Calculate total duration based on the absolute last item across logs/events
 const totalDuration = computed(() => {
-    if (!logs.value.length) return 0
+    if (!logs.value.length && !traceEvents.value.length) return 0
 
     const start = traceStart.value
     const lastLogTime = new Date(logs.value[logs.value.length - 1]?.timestamp || start).getTime()
+    const lastEventTime = new Date(traceEvents.value[traceEvents.value.length - 1]?.timestamp || start).getTime()
     const lastSpanEnd = spans.value.length ? Math.max(...spans.value.map(s => s.effectiveEnd || s.end || 0)) : 0
 
-    const end = Math.max(lastLogTime, lastSpanEnd)
+    const end = Math.max(lastLogTime, lastSpanEnd, lastEventTime)
 
     return Math.max(end - start, 1) // Ensure at least 1ms to prevent div by zero
 })
@@ -769,15 +864,15 @@ const preparedSpans = computed(() => {
         const offset = ((s.start - start) / total) * 100
         const width = (s.duration / total) * 100
 
-        const logMarkers = buildLogMarkers(s as SpanWithTimes)
-        const showLogMarkers = resolveMarkerVisibility(s.id, logMarkers.length)
+        const markers = buildSpanMarkers(s as SpanWithTimes)
+        const showMarkers = resolveMarkerVisibility(s.id, markers.length)
 
         return {
             ...s,
             offsetPercent: Math.max(0, offset), // Prevent negative offsets
             widthPercent: Math.max(width, 0.5),  // Min visibility width
-            logMarkers,
-            showLogMarkers
+            markers,
+            showMarkers
         }
     })
 })

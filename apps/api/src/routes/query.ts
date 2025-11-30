@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia";
 import { jwt } from "@elysiajs/jwt";
 import { db } from "../db";
-import { logs, projects, logGroups, events } from "../db/schema";
+import { logs, logGroups, events } from "../db/schema";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 
 export const queryRoutes = new Elysia()
@@ -28,11 +28,12 @@ export const queryRoutes = new Elysia()
         const {
             project_id, limit = "50", cursor,
             level, search, start_date, end_date, trace_id, filters,
-            exclude_system_events, error_source, crash_only
+            exclude_system_events, error_source, crash_only, include_data
         } = query;
 
         const conditions = [eq(logs.projectId, project_id)];
-        const needsFullData = Boolean(trace_id);
+        const includeData = include_data === 'true';
+        const needsFullData = Boolean(trace_id) || includeData;
 
         if (exclude_system_events === 'true') {
             // Hide tracer-emitted span lifecycle events by default
@@ -127,7 +128,8 @@ export const queryRoutes = new Elysia()
             filters: t.Optional(t.String()), // JSON string of Record<string, string>
             exclude_system_events: t.Optional(t.String()),
             error_source: t.Optional(t.String()),
-            crash_only: t.Optional(t.String())
+            crash_only: t.Optional(t.String()),
+            include_data: t.Optional(t.String())
         })
     })
     .get("/logs/:id", async ({ params, query, set }) => {
@@ -161,11 +163,12 @@ export const queryRoutes = new Elysia()
         const {
             project_id, limit = "50", cursor,
             search, start_date, end_date, trace_id, filters,
-            exclude_system_events
+            exclude_system_events, include_data
         } = query;
 
         const conditions = [eq(events.projectId, project_id)];
-        const needsFullData = Boolean(trace_id);
+        const includeData = include_data === 'true';
+        const needsFullData = Boolean(trace_id) || includeData;
 
         if (exclude_system_events === 'true') {
             // Hide tracer-emitted span lifecycle events by default
@@ -192,7 +195,7 @@ export const queryRoutes = new Elysia()
                     } else if (key === 'value') {
                         const numValue = parseFloat(value);
                         if (!isNaN(numValue)) {
-                            conditions.push(eq(events.value, numValue.toString()));
+                            conditions.push(sql`${events.value} = ${numValue}`);
                         }
                     } else if (key.startsWith('data.')) {
                         const jsonKey = key.slice(5);
@@ -262,7 +265,141 @@ export const queryRoutes = new Elysia()
             end_date: t.Optional(t.String()),
             trace_id: t.Optional(t.String()),
             filters: t.Optional(t.String()), // JSON string of Record<string, string>
-            exclude_system_events: t.Optional(t.String())
+            exclude_system_events: t.Optional(t.String()),
+            include_data: t.Optional(t.String())
+        })
+    })
+    .get("/events/analytics", async ({ query }) => {
+        const { project_id, start_date, end_date, limit = "50" } = query;
+
+        const parsedLimit = parseInt(limit, 10);
+        const limitValue = Math.min(Math.max(Number.isFinite(parsedLimit) ? parsedLimit : 50, 1), 200);
+        const now = new Date();
+
+        let start = start_date ? new Date(start_date) : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        let end = end_date ? new Date(end_date) : now;
+
+        if (isNaN(start.getTime())) start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        if (isNaN(end.getTime())) end = now;
+        if (end < start) [start, end] = [end, start];
+
+        const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+        const bucketSize = durationHours <= 48 ? 'hour' : 'day';
+        const bucketExpr = bucketSize === 'hour'
+            ? sql`date_trunc('hour', timestamp)`
+            : sql`date_trunc('day', timestamp)`;
+
+        // Aggregate by event name (event_type preferred, falling back to message)
+        const eventNameExpr = sql`COALESCE(${events.eventType}, ${events.message}, 'unknown')`;
+
+        const topEvents = await db.execute(sql`
+            SELECT 
+                ${eventNameExpr} as event_name,
+                COUNT(*)::int as count,
+                COALESCE(SUM(${events.value}), 0)::float as total_value,
+                MAX(${events.timestamp}) as last_seen
+            FROM ${events}
+            WHERE ${events.projectId} = ${project_id}
+            AND ${events.timestamp} BETWEEN ${start.toISOString()} AND ${end.toISOString()}
+            GROUP BY 1
+            ORDER BY count DESC
+            LIMIT ${limitValue}
+        `);
+
+        const eventNames = topEvents
+            .map((row) => row.event_name as string)
+            .filter(Boolean);
+
+        let sparklineRows: Array<{
+            event_name: string;
+            bucket: Date;
+            count: number;
+            total_value: number;
+        }> = [];
+
+        if (eventNames.length) {
+            const eventNameList = sql.join(
+                eventNames.map((name) => sql`${name}`),
+                sql`, `
+            );
+
+            sparklineRows = await db.execute(sql`
+                SELECT 
+                    ${eventNameExpr} as event_name,
+                    ${bucketExpr} as bucket,
+                    COUNT(*)::int as count,
+                    COALESCE(SUM(${events.value}), 0)::float as total_value
+                FROM ${events}
+                WHERE ${events.projectId} = ${project_id}
+                AND ${events.timestamp} BETWEEN ${start.toISOString()} AND ${end.toISOString()}
+                AND ${eventNameExpr} IN (${eventNameList})
+                GROUP BY 1, 2
+                ORDER BY 1, 2
+            `);
+        }
+
+        const alignToBucketStart = (date: Date) => {
+            const aligned = new Date(date);
+            if (bucketSize === 'hour') {
+                aligned.setUTCMinutes(0, 0, 0);
+            } else {
+                aligned.setUTCHours(0, 0, 0, 0);
+            }
+            return aligned;
+        };
+
+        const bucketStart = alignToBucketStart(start);
+        const bucketEnd = alignToBucketStart(end);
+        const bucketStep = bucketSize === 'hour'
+            ? 60 * 60 * 1000
+            : 24 * 60 * 60 * 1000;
+
+        const buckets: number[] = [];
+        for (let cursor = bucketStart.getTime(); cursor <= bucketEnd.getTime(); cursor += bucketStep) {
+            buckets.push(cursor);
+        }
+
+        const sparklineMap = new Map<string, Map<number, { count: number; totalValue: number }>>();
+        for (const row of sparklineRows) {
+            const bucketDate = row.bucket instanceof Date ? row.bucket : new Date(row.bucket);
+            const bucketTs = bucketDate.getTime();
+            const existing = sparklineMap.get(row.event_name) || new Map();
+            existing.set(bucketTs, { count: row.count, totalValue: row.total_value || 0 });
+            sparklineMap.set(row.event_name, existing);
+        }
+
+        const data = topEvents.map((row) => {
+            const eventName = (row.event_name as string) || 'unknown';
+            const bucketCounts = sparklineMap.get(eventName) || new Map();
+            const sparkline = buckets.map((ts) => ({
+                timestamp: ts,
+                count: bucketCounts.get(ts)?.count || 0,
+                totalValue: bucketCounts.get(ts)?.totalValue || 0
+            }));
+
+            return {
+                id: eventName,
+                eventName,
+                count: row.count as number,
+                totalValue: row.total_value ?? 0,
+                lastSeen: row.last_seen,
+                sparkline
+            };
+        });
+
+        return {
+            data,
+            bucketSize,
+            start: start.toISOString(),
+            end: end.toISOString()
+        };
+    }, {
+        detail: { tags: ["Query"], summary: "Event analytics by name" },
+        query: t.Object({
+            project_id: t.String(),
+            start_date: t.Optional(t.String()),
+            end_date: t.Optional(t.String()),
+            limit: t.Optional(t.String())
         })
     })
     .get("/events/:id", async ({ params, query, set }) => {

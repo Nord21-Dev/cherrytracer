@@ -1,16 +1,23 @@
 import { Elysia, t } from "elysia";
 import { getProjectKeyInfo } from "../services/auth";
-import { ingestQueue } from "../queue";
+import { ingestQueue, type QueueItem } from "../queue";
 import { checkReferrer } from "../services/referrer";
 
+type IngestKind = "log" | "event";
+
 type LogEventPayload = {
+  kind?: IngestKind;
+  type?: string; // legacy discriminator
   level?: string;
   message: string;
   traceId?: string;
   spanId?: string;
   data?: Record<string, any>;
   timestamp?: string;
-  type?: string;
+  eventType?: string;
+  userId?: string;
+  sessionId?: string;
+  value?: number | string;
 };
 
 type EnvelopePayload = {
@@ -21,13 +28,18 @@ type EnvelopePayload = {
 type IncomingBody = LogEventPayload | LogEventPayload[] | EnvelopePayload;
 
 const logSchema = t.Object({
+  kind: t.Optional(t.Union([t.Literal("log"), t.Literal("event")])),
+  type: t.Optional(t.String()), // legacy discriminator
   level: t.Optional(t.String()),
   message: t.String(),
   traceId: t.Optional(t.String()),
   spanId: t.Optional(t.String()),
   data: t.Optional(t.Any()),
   timestamp: t.Optional(t.String()),
-  type: t.Optional(t.String())
+  eventType: t.Optional(t.String()),
+  userId: t.Optional(t.String()),
+  sessionId: t.Optional(t.String()),
+  value: t.Optional(t.Union([t.Number(), t.String()]))
 }, { additionalProperties: true });
 
 const envelopeSchema = t.Object({
@@ -58,6 +70,54 @@ const normalizeBody = (payload: IncomingBody) => {
 const coerceHeader = (value: string | string[] | undefined) => {
   if (!value) return undefined;
   return Array.isArray(value) ? value[0] : value;
+};
+
+const resolveKind = (payload: LogEventPayload): IngestKind => {
+  if (payload.kind === "event") return "event";
+  if (payload.type === "event") return "event";
+  if (payload.eventType) return "event";
+  return "log";
+};
+
+const toNumericString = (value: unknown): string | null => {
+  if (value === undefined || value === null) return null;
+  const num = typeof value === "number" ? value : parseFloat(String(value));
+  if (Number.isFinite(num)) return num.toString();
+  return null;
+};
+
+const buildQueueItem = (event: LogEventPayload, projectId: string, source: "browser" | "server"): QueueItem => {
+  const kind = resolveKind(event);
+  const timestamp = event.timestamp ? new Date(event.timestamp) : new Date();
+  const base = {
+    projectId,
+    source,
+    traceId: event.traceId || null,
+    spanId: event.spanId || null,
+    timestamp,
+  };
+
+  if (kind === "event") {
+    const value = toNumericString(event.value ?? event.data?.value);
+    return {
+      ...base,
+      kind: "event" as const,
+      message: event.message || event.eventType || "",
+      data: { ...(event.data || {}) },
+      eventType: event.eventType || event.message || null,
+      userId: event.userId || event.data?.userId || null,
+      sessionId: event.sessionId || event.data?.sessionId || null,
+      value,
+    };
+  }
+
+  return {
+    ...base,
+    kind: "log" as const,
+    level: event.level || "info",
+    message: event.message || "",
+    data: { ...(event.data || {}) },
+  };
 };
 
 export const ingestRoutes = new Elysia({ prefix: "/ingest" })
@@ -122,17 +182,8 @@ export const ingestRoutes = new Elysia({ prefix: "/ingest" })
 
     let accepted = 0;
     for (const event of events) {
-      const isEvent = event.type === 'event';
-      const ok = ingestQueue.add({
-        projectId,
-        source: keyType === "browser" ? "browser" : "server",
-        traceId: event.traceId || null,
-        spanId: event.spanId || null,
-        level: isEvent ? undefined : (event.level || "info"),
-        message: event.message || "",
-        data: { ...(event.data || {}), type: event.type },
-        timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
-      });
+      const queueItem = buildQueueItem(event, projectId, keyType === "browser" ? "browser" : "server");
+      const ok = ingestQueue.add(queueItem);
 
       if (!ok) {
         set.status = 429;

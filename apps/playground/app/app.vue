@@ -71,6 +71,21 @@
                             <span>Subscription Upgrade</span>
                             <span class="meta">$$$ Event</span>
                         </button>
+
+                        <button @click="sim.enterpriseSamlLogin()" class="btn" data-tooltip="Simulates SAML login with trace + auth events">
+                            <span>Enterprise SAML Login</span>
+                            <span class="meta">Auth + Session</span>
+                        </button>
+
+                        <button @click="sim.billingDisputeFlow()" class="btn btn-warning" data-tooltip="Tests dispute + refund events and revenue adjustments">
+                            <span>Billing Dispute & Refund</span>
+                            <span class="meta">Revenue Negative/Positive</span>
+                        </button>
+
+                        <button @click="sim.fraudInvestigation()" class="btn btn-danger" data-tooltip="Flags high-risk activity and manual review">
+                            <span>Fraud Investigation</span>
+                            <span class="meta">Risk + Decision</span>
+                        </button>
                     </div>
                 </div>
 

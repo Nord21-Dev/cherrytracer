@@ -30,7 +30,7 @@
             </UPopover>
         </div>
 
-        <div class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <UCard v-for="group in groups" :key="group.id"
                 class="group hover:ring-2 hover:ring-primary-500/50 transition-all duration-200">
                 <div class="flex flex-col md:flex-row gap-6 items-center">
@@ -89,19 +89,29 @@
 
 <script setup lang="ts">
 import { CalendarDate, DateFormatter, getLocalTimeZone } from '@internationalized/date'
-import { formatDistanceToNow, endOfDay, eachDayOfInterval, isSameDay, eachHourOfInterval, isSameHour } from 'date-fns'
+import { formatDistanceToNow, endOfDay } from 'date-fns'
 import EventSparkline from '~/components/viz/EventSparkline.vue'
 import type { EventSparkPoint } from '~/components/viz/EventSparkline.vue'
 
 const { fetchApi } = useCherryApi()
 const { selectedProjectId } = useProject()
 
+type AnalyticsGroup = {
+    id: string
+    eventName: string
+    pattern: string
+    count: number
+    totalValue: number
+    lastSeen: string
+    sparkline: EventSparkPoint[]
+}
+
 // Date Range State
 const now = new Date()
 const today = new CalendarDate(now.getFullYear(), now.getMonth() + 1, now.getDate())
 const sevenDaysAgo = today.subtract({ days: 7 })
 
-const dateRange = ref({
+const dateRange = ref<any>({
     start: sevenDaysAgo,
     end: today
 })
@@ -110,31 +120,65 @@ const df = new DateFormatter('en-US', {
     dateStyle: 'medium'
 })
 
-const groups = ref<any[]>([])
+const groups = ref<AnalyticsGroup[]>([])
 const isLoading = ref(false)
+let refreshQueued = false
 
 const fetchGroups = async () => {
-    if (!selectedProjectId.value) return
+    const projectId = selectedProjectId.value
+    const range = dateRange.value
+    if (!projectId || !range?.start || !range?.end) return
+    if (isLoading.value) {
+        refreshQueued = true
+        return
+    }
     
     isLoading.value = true
     try {
-        const start = dateRange.value.start.toDate(getLocalTimeZone())
-        const end = dateRange.value.end.toDate(getLocalTimeZone())
-        // Adjust end date to end of day to include all events of that day
-        const endAdjusted = endOfDay(end)
+        const start = range.start.toDate(getLocalTimeZone())
+        const endAdjusted = endOfDay(range.end.toDate(getLocalTimeZone()))
 
-        const res = await fetchApi<{ data: any[] }>('/api/events', {
+        const res = await fetchApi<{ data: any[] }>('/api/events/analytics', {
             params: {
-                project_id: selectedProjectId.value,
-                limit: 1000,
+                project_id: projectId,
                 start_date: start.toISOString(),
-                end_date: endAdjusted.toISOString(),
-                filters: JSON.stringify({ 'data.type': 'event' })
+                end_date: endAdjusted.toISOString()
             }
         })
 
         if (res?.data) {
-            processEvents(res.data, start, endAdjusted)
+            groups.value = res.data.map((item: any) => {
+                const sparkline = (item.sparkline || []).map((point: any) => {
+                    const ts = point.timestamp instanceof Date
+                        ? point.timestamp.getTime()
+                        : typeof point.timestamp === 'string'
+                            ? new Date(point.timestamp).getTime()
+                            : Number(point.timestamp)
+
+                    return {
+                        timestamp: ts,
+                        count: Number(point.count) || 0,
+                        totalValue: Number(point.totalValue) || 0
+                    } as EventSparkPoint
+                })
+
+                const name = item.eventName || item.id
+                const lastSeen = item.lastSeen instanceof Date
+                    ? item.lastSeen.toISOString()
+                    : typeof item.lastSeen === 'string'
+                        ? item.lastSeen
+                        : ''
+
+                return {
+                    id: item.id || name,
+                    eventName: name,
+                    pattern: name,
+                    count: Number(item.count) || 0,
+                    totalValue: Number(item.totalValue) || 0,
+                    lastSeen,
+                    sparkline
+                } as AnalyticsGroup
+            })
         } else {
             groups.value = []
         }
@@ -143,79 +187,11 @@ const fetchGroups = async () => {
         groups.value = []
     } finally {
         isLoading.value = false
-    }
-}
-
-const processEvents = (events: any[], start: Date, end: Date) => {
-    const eventGroups = new Map<string, any>();
-
-    // 1. Group events
-    for (const event of events) {
-        const key = event.eventType || event.message;
-        if (!eventGroups.has(key)) {
-            eventGroups.set(key, {
-                id: key,
-                pattern: key,
-                exampleMessage: event.message,
-                count: 0,
-                totalValue: 0,
-                lastSeen: event.timestamp,
-                events: [] // Store for sparkline generation
-            });
-        }
-        const group = eventGroups.get(key)!;
-        group.count += 1;
-        group.totalValue += (event.value || 0);
-        if (new Date(event.timestamp) > new Date(group.lastSeen)) {
-            group.lastSeen = event.timestamp;
-            group.exampleMessage = event.message;
-        }
-        group.events.push(event);
-    }
-
-    // 2. Generate sparkline data for each group
-    const result = Array.from(eventGroups.values()).map(group => {
-        group.sparkline = generateSparkline(group.events, start, end)
-        delete group.events // Cleanup to save memory
-        return group
-    })
-
-    // 3. Sort by count
-    groups.value = result.sort((a, b) => b.count - a.count).slice(0, 50);
-}
-
-const generateSparkline = (events: any[], start: Date, end: Date): EventSparkPoint[] => {
-    // Determine bucket size (hour or day)
-    const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
-    const useHours = durationHours <= 48
-
-    let buckets: Date[] = []
-    try {
-        buckets = useHours
-            ? eachHourOfInterval({ start, end })
-            : eachDayOfInterval({ start, end })
-    } catch (e) {
-        // Fallback if interval is invalid
-        return []
-    }
-
-    const points = buckets.map(date => ({
-        timestamp: date.getTime(),
-        count: 0
-    }))
-
-    for (const event of events) {
-        const ts = new Date(event.timestamp)
-        const bucketIndex = useHours
-            ? buckets.findIndex(b => isSameHour(b, ts))
-            : buckets.findIndex(b => isSameDay(b, ts))
-
-        if (bucketIndex !== -1) {
-            points[bucketIndex].count++
+        if (refreshQueued) {
+            refreshQueued = false
+            fetchGroups()
         }
     }
-
-    return points
 }
 
 // Initial fetch
@@ -243,6 +219,10 @@ const formatTime = (ts: string) => {
 }
 
 const formatCount = (num: number) => {
-    return new Intl.NumberFormat('en-US', { notation: "compact", compactDisplay: "short" }).format(num)
+    return new Intl.NumberFormat('en-US', {
+        notation: "compact",
+        compactDisplay: "short",
+        maximumFractionDigits: 2
+    }).format(num || 0)
 }
 </script>

@@ -159,6 +159,108 @@ export class Simulator {
     });
   }
 
+  // 4b. Enterprise SAML Login & Session start
+  async enterpriseSamlLogin() {
+    const userId = "ent_" + Math.random().toString(36).substring(7);
+    const sessionId = "sess_" + Math.random().toString(36).substring(7);
+    const idp = ["Okta", "AzureAD", "Google"].sort(() => 0.5 - Math.random())[0];
+
+    await this.logger.trace("saml_login", async (span) => {
+      this.logger.track("saml_assertion_received", {
+        eventType: "auth",
+        userId,
+        sessionId,
+        idp,
+        audience: "urn:cherrytracer"
+      });
+      span.info("Validating SAML assertion", { idp });
+      await this.sleep(150);
+
+      this.logger.track("saml_session_started", {
+        eventType: "session",
+        userId,
+        sessionId,
+        idp,
+        mfa: Math.random() > 0.5 ? "webauthn" : "totp"
+      });
+      span.end({ status: "success" });
+    });
+  }
+
+  // 4c. Billing dispute + refund flow
+  async billingDisputeFlow() {
+    const userId = "u_" + Math.random().toString(36).substring(7);
+    const sessionId = "sess_" + Math.random().toString(36).substring(7);
+    const amount = Math.floor(Math.random() * 200) + 50;
+
+    await this.logger.trace("billing_dispute", async (span) => {
+      this.logger.track("invoice_dispute_opened", {
+        eventType: "finance",
+        userId,
+        sessionId,
+        invoiceId: "inv_" + Math.random().toString(36).substring(7),
+        value: -amount,
+        reason: "duplicate_charge"
+      });
+      span.info("Dispute opened", { amount, currency: "USD" });
+      await this.sleep(300);
+
+      this.logger.track("evidence_uploaded", {
+        eventType: "finance",
+        userId,
+        sessionId,
+        documents: 3
+      });
+      await this.sleep(250);
+
+      this.logger.track("refund_processed", {
+        eventType: "revenue",
+        userId,
+        sessionId,
+        value: -amount,
+        currency: "USD"
+      });
+      await this.sleep(150);
+
+      this.logger.track("dispute_resolved", {
+        eventType: "finance",
+        userId,
+        sessionId,
+        resolution: "customer_favored"
+      });
+      span.end({ status: "success" });
+    });
+  }
+
+  // 4d. Fraud investigation and decision
+  async fraudInvestigation() {
+    const userId = "u_" + Math.floor(Math.random() * 1000);
+    const sessionId = "sess_" + Math.random().toString(36).substring(7);
+    const score = Math.round(Math.random() * 100);
+
+    await this.logger.trace("fraud_investigation", async (span) => {
+      this.logger.track("risk_scored", {
+        eventType: "risk",
+        userId,
+        sessionId,
+        score,
+        model: "fraud_v2"
+      });
+      span.info("Risk model evaluated", { score });
+      await this.sleep(200);
+
+      const decision = score > 75 ? "block" : score > 50 ? "review" : "allow";
+      this.logger.track("risk_decision", {
+        eventType: "risk",
+        userId,
+        sessionId,
+        decision,
+        reviewer: decision === "review" ? "agent_" + Math.floor(Math.random() * 50) : undefined
+      });
+      span.end({ status: decision === "block" ? "error" : "success" });
+    });
+  }
+
   // 5. E-commerce Purchase Flow
   async ecommercePurchase() {
     const userId = "u_" + Math.random().toString(36).substring(7);

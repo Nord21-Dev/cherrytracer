@@ -7,7 +7,9 @@ import { createHash } from "crypto";
 
 type NewLog = typeof logs.$inferInsert;
 type NewEvent = typeof events.$inferInsert;
-type QueueItem = NewLog | NewEvent;
+type QueueLog = NewLog & { kind: 'log' };
+type QueueEvent = NewEvent & { kind: 'event' };
+export type QueueItem = QueueLog | QueueEvent;
 
 // Regex patterns for fingerprinting
 const UUID_REGEX = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g;
@@ -72,39 +74,38 @@ class IngestQueue {
     const projectCounts = new Map<string, { total: number; critical: number }>();
 
     // Split batch into logs and events BEFORE fingerprinting
-    const logsBatch: NewLog[] = [];
-    const eventsBatch: NewEvent[] = [];
+    const logsBatch: QueueLog[] = [];
+    const eventsBatch: QueueEvent[] = [];
 
     for (const item of batch) {
-      if ((item.data as any)?.type === 'event') {
-        eventsBatch.push(item as NewEvent);
+      if (item.kind === 'event') {
+        eventsBatch.push(item as QueueEvent);
       } else {
-        logsBatch.push(item as NewLog);
+        logsBatch.push(item as QueueLog);
       }
     }
 
     // Pre-process logs batch to compute fingerprints (skip events)
-    const processedLogsBatch = logsBatch.map(log => {
+    const processedLogsBatch: (NewLog & { pattern: string })[] = logsBatch.map(({ kind, ...log }) => {
       const { fingerprint, pattern } = computeFingerprint(log.message || "");
       return { ...log, fingerprint, pattern };
     });
 
-    // Combine for project counts (events don't need fingerprinting)
-    const allProcessedBatch = [...processedLogsBatch, ...eventsBatch];
+    const incrementCounts = (items: Array<QueueLog | QueueEvent>) => {
+      for (const log of items) {
+        const existing = projectCounts.get(log.projectId) || { total: 0, critical: 0 };
+        const isCritical = (log as any)?.data?.error_source === 'auto_captured';
+        existing.total += 1;
+        if (isCritical) existing.critical += 1;
+        projectCounts.set(log.projectId, existing);
+      }
+    };
 
-    allProcessedBatch.forEach(log => {
-      const existing = projectCounts.get(log.projectId) || { total: 0, critical: 0 };
-      const isCritical = (log.data as Record<string, any> | null)?.error_source === 'auto_captured';
-
-      existing.total += 1;
-      if (isCritical) existing.critical += 1;
-
-      projectCounts.set(log.projectId, existing);
-    });
+    incrementCounts(logsBatch);
 
     try {
-      if (await partitioningService.isPartitionedLogsTable()) {
-        const timestamps = allProcessedBatch
+      if (processedLogsBatch.length && await partitioningService.isPartitionedLogsTable()) {
+        const timestamps = processedLogsBatch
           .map((log) => log.timestamp)
           .filter((value): value is Date => value instanceof Date);
 
@@ -151,7 +152,8 @@ class IngestQueue {
               target: [logGroups.projectId, logGroups.fingerprint],
               set: {
                 lastSeen: sql`GREATEST(${logGroups.lastSeen}, EXCLUDED.last_seen)`,
-                count: sql`${logGroups.count} + 1`,
+                firstSeen: sql`LEAST(${logGroups.firstSeen}, EXCLUDED.first_seen)`,
+                count: sql`${logGroups.count} + EXCLUDED.count`,
                 // Optional: Update example message if we want fresh ones, but usually keeping the first is fine
               }
             });
@@ -160,11 +162,13 @@ class IngestQueue {
 
       // 2. Insert Logs & Events
       if (processedLogsBatch.length) {
-        await db.insert(logs).values(processedLogsBatch);
+        const logsToInsert = processedLogsBatch.map(({ pattern, ...log }) => log);
+        await db.insert(logs).values(logsToInsert);
       }
 
       if (eventsBatch.length) {
-        await db.insert(events).values(eventsBatch);
+        const eventsInsertBatch: NewEvent[] = eventsBatch.map(({ kind, ...event }) => event);
+        await db.insert(events).values(eventsInsertBatch);
       }
 
       for (const [projectId, counts] of projectCounts) {

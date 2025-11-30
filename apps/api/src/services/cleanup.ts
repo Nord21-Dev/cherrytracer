@@ -8,7 +8,7 @@ export const cleanupService = {
   async pruneLogs() {
     console.log(`[Cleanup] Starting maintenance job...`);
 
-    const retentionDays = parseInt(process.env.RETENTION_DAYS || "14");
+    const retentionDays = parseInt(process.env.RETENTION_DAYS || "30");
     const partitionsActive = await partitioningService.ensurePartitionedTable();
 
     if (partitionsActive) {

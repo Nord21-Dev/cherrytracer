@@ -26,6 +26,7 @@ import { format } from 'date-fns'
 export type EventSparkPoint = {
     timestamp: number
     count: number
+    totalValue?: number
 }
 
 const props = withDefaults(defineProps<{
