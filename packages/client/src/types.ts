@@ -21,12 +21,18 @@ export interface CherryConfig {
 }
 
 export interface LogEvent {
-  level: LogLevel;
+  level?: LogLevel;
   message: string;
   data?: Record<string, any>;
   traceId?: string;
   spanId?: string;
   timestamp?: string; // ISO string
+  type?: "log" | "event";
+  // Event-specific fields (populated for type: "event")
+  eventType?: string;
+  userId?: string;
+  sessionId?: string;
+  value?: number;
 }
 
 export interface StartSpanOptions {

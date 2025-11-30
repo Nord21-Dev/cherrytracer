@@ -16,7 +16,7 @@
         <div class="space-y-8 animate-in fade-in duration-500">
 
             <!-- 2. KPI Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <!-- Total Traffic -->
                 <UCard class="ring-1 ring-gray-200 dark:ring-neutral-800 bg-white dark:bg-neutral-900/50">
                     <div class="flex items-start justify-between">
@@ -64,6 +64,22 @@
                         <div
                             class="p-2 rounded-lg bg-blue-500/10 text-blue-500 aspect-square flex items-center justify-center">
                             <UIcon name="i-lucide-network" class="w-5 h-5" />
+                        </div>
+                    </div>
+                </UCard>
+
+                <!-- Events KPI -->
+                <UCard class="ring-1 ring-gray-200 dark:ring-neutral-800 bg-white dark:bg-neutral-900/50">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <p class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-500">
+                                Total Events</p>
+                            <h3 class="text-2xl font-bold mt-1">{{ stats?.kpis?.events?.total_events?.toLocaleString() || '0' }}</h3>
+                            <p class="text-xs text-gray-400 mt-1">{{ stats?.kpis?.events?.distinct_event_names || 0 }} event types</p>
+                        </div>
+                        <div
+                            class="p-2 rounded-lg bg-purple-500/10 text-purple-500 aspect-square flex items-center justify-center">
+                            <UIcon name="i-lucide-star" class="w-5 h-5" />
                         </div>
                     </div>
                 </UCard>

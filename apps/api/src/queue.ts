@@ -1,11 +1,15 @@
 import { db } from "./db";
-import { logs, logGroups } from "./db/schema";
+import { logs, logGroups, events } from "./db/schema";
 import { websocketService } from "./services/websocket";
 import { partitioningService } from "./services/partitioning";
 import { sql } from "drizzle-orm";
 import { createHash } from "crypto";
 
 type NewLog = typeof logs.$inferInsert;
+type NewEvent = typeof events.$inferInsert;
+type QueueLog = NewLog & { kind: 'log' };
+type QueueEvent = NewEvent & { kind: 'event' };
+export type QueueItem = QueueLog | QueueEvent;
 
 // Regex patterns for fingerprinting
 const UUID_REGEX = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g;
@@ -28,7 +32,7 @@ const computeFingerprint = (message: string) => {
 };
 
 class IngestQueue {
-  private queue: NewLog[] = [];
+  private queue: QueueItem[] = [];
 
   private readonly BATCH_SIZE = 1000;
   private readonly FLUSH_INTERVAL_MS = 2000;
@@ -67,27 +71,41 @@ class IngestQueue {
     this.isFlushing = true;
     const batch = this.queue.splice(0, this.BATCH_SIZE);
 
-  const projectCounts = new Map<string, { total: number; critical: number }>();
+    const projectCounts = new Map<string, { total: number; critical: number }>();
 
-    // Pre-process batch to compute fingerprints
-    const processedBatch = batch.map(log => {
+    // Split batch into logs and events BEFORE fingerprinting
+    const logsBatch: QueueLog[] = [];
+    const eventsBatch: QueueEvent[] = [];
+
+    for (const item of batch) {
+      if (item.kind === 'event') {
+        eventsBatch.push(item as QueueEvent);
+      } else {
+        logsBatch.push(item as QueueLog);
+      }
+    }
+
+    // Pre-process logs batch to compute fingerprints (skip events)
+    const processedLogsBatch: (NewLog & { pattern: string })[] = logsBatch.map(({ kind, ...log }) => {
       const { fingerprint, pattern } = computeFingerprint(log.message || "");
       return { ...log, fingerprint, pattern };
     });
 
-    processedBatch.forEach(log => {
-      const existing = projectCounts.get(log.projectId) || { total: 0, critical: 0 };
-      const isCritical = (log.data as Record<string, any> | null)?.error_source === 'auto_captured';
+    const incrementCounts = (items: Array<QueueLog | QueueEvent>) => {
+      for (const log of items) {
+        const existing = projectCounts.get(log.projectId) || { total: 0, critical: 0 };
+        const isCritical = (log as any)?.data?.error_source === 'auto_captured';
+        existing.total += 1;
+        if (isCritical) existing.critical += 1;
+        projectCounts.set(log.projectId, existing);
+      }
+    };
 
-      existing.total += 1;
-      if (isCritical) existing.critical += 1;
-
-      projectCounts.set(log.projectId, existing);
-    });
+    incrementCounts(logsBatch);
 
     try {
-      if (await partitioningService.isPartitionedLogsTable()) {
-        const timestamps = processedBatch
+      if (processedLogsBatch.length && await partitioningService.isPartitionedLogsTable()) {
+        const timestamps = processedLogsBatch
           .map((log) => log.timestamp)
           .filter((value): value is Date => value instanceof Date);
 
@@ -98,51 +116,60 @@ class IngestQueue {
         }
       }
 
-      // 1. Upsert Log Groups
-      // We need unique groups per batch to avoid conflicts in the same insert
-      const groupsMap = new Map<string, typeof logGroups.$inferInsert>();
+      // 1. Upsert Log Groups (only for logs, not events)
+      if (processedLogsBatch.length > 0) {
+        const groupsMap = new Map<string, typeof logGroups.$inferInsert>();
 
-      for (const log of processedBatch) {
-        if (!log.fingerprint) continue;
-        const key = `${log.projectId}:${log.fingerprint}`;
+        for (const log of processedLogsBatch) {
+          if (!log.fingerprint) continue;
+          const key = `${log.projectId}:${log.fingerprint}`;
 
-        if (!groupsMap.has(key)) {
-          groupsMap.set(key, {
-            projectId: log.projectId,
-            fingerprint: log.fingerprint,
-            pattern: log.pattern,
-            exampleMessage: log.message?.substring(0, 1000), // Store first example
-            level: log.level,
-            count: 1,
-            firstSeen: log.timestamp,
-            lastSeen: log.timestamp,
-          });
-        } else {
-          // Update lastSeen for existing group in this batch
-          const g = groupsMap.get(key)!;
-          if (log.timestamp > g.lastSeen) g.lastSeen = log.timestamp;
-          if (log.timestamp < g.firstSeen) g.firstSeen = log.timestamp;
-          g.count = (g.count || 0) + 1;
+          if (!groupsMap.has(key)) {
+            groupsMap.set(key, {
+              projectId: log.projectId,
+              fingerprint: log.fingerprint,
+              pattern: log.pattern,
+              exampleMessage: log.message?.substring(0, 1000), // Store first example
+              level: log.level,
+              count: 1,
+              firstSeen: log.timestamp,
+              lastSeen: log.timestamp,
+            });
+          } else {
+            // Update lastSeen for existing group in this batch
+            const g = groupsMap.get(key)!;
+            if (log.timestamp > g.lastSeen) g.lastSeen = log.timestamp;
+            if (log.timestamp < g.firstSeen) g.firstSeen = log.timestamp;
+            g.count = (g.count || 0) + 1;
+          }
+        }
+
+        if (groupsMap.size > 0) {
+          const groups = Array.from(groupsMap.values());
+          await db.insert(logGroups)
+            .values(groups)
+            .onConflictDoUpdate({
+              target: [logGroups.projectId, logGroups.fingerprint],
+              set: {
+                lastSeen: sql`GREATEST(${logGroups.lastSeen}, EXCLUDED.last_seen)`,
+                firstSeen: sql`LEAST(${logGroups.firstSeen}, EXCLUDED.first_seen)`,
+                count: sql`${logGroups.count} + EXCLUDED.count`,
+                // Optional: Update example message if we want fresh ones, but usually keeping the first is fine
+              }
+            });
         }
       }
 
-      if (groupsMap.size > 0) {
-        const groups = Array.from(groupsMap.values());
-        await db.insert(logGroups)
-          .values(groups)
-          .onConflictDoUpdate({
-            target: [logGroups.projectId, logGroups.fingerprint],
-            set: {
-              lastSeen: sql`GREATEST(${logGroups.lastSeen}, EXCLUDED.last_seen)`,
-              count: sql`${logGroups.count} + 1`,
-              // Optional: Update example message if we want fresh ones, but usually keeping the first is fine
-            }
-          });
+      // 2. Insert Logs & Events
+      if (processedLogsBatch.length) {
+        const logsToInsert = processedLogsBatch.map(({ pattern, ...log }) => log);
+        await db.insert(logs).values(logsToInsert);
       }
 
-      // 2. Insert Logs (exclude pattern from log object as it's not in logs table)
-      const logsToInsert = processedBatch.map(({ pattern, ...log }) => log);
-      await db.insert(logs).values(logsToInsert);
+      if (eventsBatch.length) {
+        const eventsInsertBatch: NewEvent[] = eventsBatch.map(({ kind, ...event }) => event);
+        await db.insert(events).values(eventsInsertBatch);
+      }
 
       for (const [projectId, counts] of projectCounts) {
         const existing = this.notificationBuffer.get(projectId) || { total: 0, critical: 0 };
@@ -196,13 +223,13 @@ class IngestQueue {
     return this.MAX_QUEUE_SIZE - this.queue.length;
   }
 
-  public add(log: NewLog) {
+  public add(item: QueueItem) {
     if (this.queue.length >= this.MAX_QUEUE_SIZE) {
       console.warn(`[Queue] ⚠️ Dropping log, queue full (${this.queue.length})`);
       return false;
     }
 
-    this.queue.push(log);
+    this.queue.push(item);
 
     if (this.queue.length >= this.BATCH_SIZE) {
       this.flush();

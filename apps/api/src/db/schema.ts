@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, uuid, index, varchar, uniqueIndex, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb, uuid, index, varchar, uniqueIndex, integer, decimal } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 // System Settings (Singleton pattern via primary key)
@@ -55,6 +55,44 @@ export const logs = pgTable("logs", {
 
   // Fingerprint index for grouping
   index("fingerprint_idx").on(table.fingerprint),
+]);
+
+// Events: Business events with optimized schema for analytics
+export const events = pgTable("events", {
+  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+  projectId: uuid("project_id").references(() => projects.id).notNull(),
+  traceId: varchar("trace_id", { length: 64 }),
+  spanId: varchar("span_id", { length: 64 }),
+  source: varchar("source", { length: 16 }).notNull().default("server"),
+  message: text("message"), // Event name
+  data: jsonb("data"), // Additional event properties
+  // Event-specific fields for better analytics performance
+  eventType: varchar("event_type", { length: 100 }), // e.g., 'user_signup', 'purchase', 'page_view'
+  userId: varchar("user_id", { length: 255 }), // User identifier
+  sessionId: varchar("session_id", { length: 255 }), // Session identifier
+  value: decimal("value", { precision: 15, scale: 4 }), // Numeric value (revenue, duration, etc.)
+  timestamp: timestamp("timestamp", { mode: 'date', withTimezone: true }).notNull(),
+}, (table) => [
+  // Core indexes
+  index("event_project_idx").on(table.projectId),
+  index("event_trace_idx").on(table.traceId),
+  index("event_time_idx").on(table.timestamp),
+
+  // Event-specific indexes for analytics queries
+  index("event_type_time_idx").on(table.eventType, table.timestamp),
+  index("event_user_time_idx").on(table.userId, table.timestamp),
+  index("event_session_time_idx").on(table.sessionId, table.timestamp),
+  index("event_type_user_idx").on(table.eventType, table.userId),
+
+  // JSONB index for flexible property queries
+  index("event_data_gin_idx").using("gin", table.data),
+
+  // Full text search on event name
+  index("event_message_search_idx").using("gin", sql`to_tsvector('simple', ${table.message})`),
+
+  // Value-based indexes for numeric analytics
+  index("event_value_idx").on(table.value),
+  index("event_type_value_idx").on(table.eventType, table.value),
 ]);
 
 // Log Groups: Smart Grouping (Hash/Vector)

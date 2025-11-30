@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia";
 import { jwt } from "@elysiajs/jwt";
 import { db } from "../db";
-import { logs } from "../db/schema";
+import { logs, events } from "../db/schema";
 import { sql } from "drizzle-orm";
 
 export const statsRoutes = new Elysia({ prefix: "/stats" })
@@ -63,6 +63,48 @@ export const statsRoutes = new Elysia({ prefix: "/stats" })
             AND timestamp > NOW() - INTERVAL '${sql.raw(lookback)}'
         `);
 
+        // Event KPIs for the same lookback window
+        const eventKpis = await db.execute(sql`
+            SELECT
+                COUNT(*)::int as total_events,
+                COUNT(DISTINCT message)::int as distinct_event_names,
+                COUNT(DISTINCT event_type)::int as distinct_event_types,
+                COUNT(DISTINCT user_id)::int as unique_users,
+                COUNT(DISTINCT session_id)::int as unique_sessions,
+                SUM(value)::float as total_value,
+                AVG(value)::float as avg_value
+            FROM ${events}
+            WHERE project_id = ${project_id}
+            AND timestamp > NOW() - INTERVAL '${sql.raw(lookback)}'
+        `);
+
+        // Event time-series (same bucketing as logs)
+        const eventTimeSeries = await db.execute(sql`
+            SELECT
+                ${bucketExpr} as date,
+                COUNT(*)::int as count
+            FROM ${events}
+            WHERE project_id = ${project_id}
+            AND timestamp > NOW() - INTERVAL '${sql.raw(lookback)}'
+            GROUP BY 1
+            ORDER BY 1 ASC
+        `);
+
+        // Top event names (message used as event name)
+        const topEventNames = await db.execute(sql`
+            SELECT
+                COALESCE(event_type, message) as event_name,
+                COUNT(*)::int as count,
+                SUM(value)::float as total_value,
+                AVG(value)::float as avg_value
+            FROM ${events}
+            WHERE project_id = ${project_id}
+            AND timestamp > NOW() - INTERVAL '${sql.raw(lookback)}'
+            GROUP BY COALESCE(event_type, message)
+            ORDER BY count DESC
+            LIMIT 10
+        `);
+
         const offenders = await db.execute(sql`
             SELECT 
                 message,
@@ -87,9 +129,15 @@ export const statsRoutes = new Elysia({ prefix: "/stats" })
             chart: timeSeries,
             kpis: {
                 ...stats,
-                error_rate: errorRate
+                error_rate: errorRate,
+                // Events summary
+                events: eventKpis[0] || { total_events: 0, distinct_event_names: 0, distinct_event_types: 0, unique_users: 0, unique_sessions: 0, total_value: 0, avg_value: 0 }
             },
-            offenders
+            offenders,
+            events: {
+                chart: eventTimeSeries,
+                top: topEventNames
+            }
         };
     }, {
         query: t.Object({
@@ -145,4 +193,85 @@ export const statsRoutes = new Elysia({ prefix: "/stats" })
             project_id: t.String(),
             period: t.Optional(t.String())
         })
+    });
+
+    // Event-specific stats endpoint
+    statsRoutes.get = statsRoutes.get || (() => {});
+    
+    // Note: we add another handler to the chain by creating a new Elysia route below
+    // because the chained builder was closed above. We'll export it by re-using the same
+    // `statsRoutes` instance and attaching a new route directly.
+
+    // Attach /events route
+    statsRoutes.get('/events', async ({ query }) => {
+        const { project_id, period = '24h' } = query as any;
+
+        let interval = '30 minutes';
+        let lookback = '24 hours';
+
+        if (period === '1h') {
+            interval = '1 minute';
+            lookback = '1 hour';
+        } else if (period === '7d') {
+            interval = '4 hours';
+            lookback = '7 days';
+        }
+
+        let bucketExpr;
+        if (interval === '1 minute') {
+            bucketExpr = sql`date_trunc('minute', timestamp)`;
+        } else if (interval === '30 minutes') {
+            bucketExpr = sql`date_trunc('hour', timestamp) + interval '30 minute' * (extract(minute from timestamp)::int / 30)`;
+        } else if (interval === '4 hours') {
+            bucketExpr = sql`date_trunc('day', timestamp) + interval '4 hour' * (extract(hour from timestamp)::int / 4)`;
+        } else {
+            bucketExpr = sql`date_trunc('hour', timestamp)`;
+        }
+
+        const eventTimeSeries = await db.execute(sql`
+            SELECT
+                ${bucketExpr} as date,
+                COUNT(*)::int as count
+            FROM ${events}
+            WHERE project_id = ${project_id}
+            AND timestamp > NOW() - INTERVAL '${sql.raw(lookback)}'
+            GROUP BY 1
+            ORDER BY 1 ASC
+        `);
+
+        const eventKpis = await db.execute(sql`
+            SELECT
+                COUNT(*)::int as total_events,
+                COUNT(DISTINCT message)::int as distinct_event_names,
+                COUNT(DISTINCT event_type)::int as distinct_event_types,
+                COUNT(DISTINCT user_id)::int as unique_users,
+                COUNT(DISTINCT session_id)::int as unique_sessions,
+                SUM(value)::float as total_value,
+                AVG(value)::float as avg_value
+            FROM ${events}
+            WHERE project_id = ${project_id}
+            AND timestamp > NOW() - INTERVAL '${sql.raw(lookback)}'
+        `);
+
+        const topEventNames = await db.execute(sql`
+            SELECT
+                COALESCE(event_type, message) as event_name,
+                COUNT(*)::int as count,
+                SUM(value)::float as total_value,
+                AVG(value)::float as avg_value
+            FROM ${events}
+            WHERE project_id = ${project_id}
+            AND timestamp > NOW() - INTERVAL '${sql.raw(lookback)}'
+            GROUP BY COALESCE(event_type, message)
+            ORDER BY count DESC
+            LIMIT 20
+        `);
+
+        return {
+            chart: eventTimeSeries,
+            kpis: eventKpis[0] || { total_events: 0, distinct_event_names: 0, unique_users: 0 },
+            top: topEventNames
+        };
+    }, {
+        query: t.Object({ project_id: t.String(), period: t.Optional(t.String()) })
     });

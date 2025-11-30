@@ -9,7 +9,7 @@ services:
   api:
     image: 'nord21dev/cherrytracer-api:latest'
     restart: always
-    command: '/bin/sh -c "cd apps/api && bun run db:push && bun run src/index.ts"'
+    command: '/bin/sh -c "cd apps/api && bun run db:sync && bun run src/index.ts"'
     environment:
       DATABASE_URL: 'postgres://cherry:cherry@db:5432/cherry'
       JWT_SECRET: auto_generated_internal_secret_key_change_if_you_want

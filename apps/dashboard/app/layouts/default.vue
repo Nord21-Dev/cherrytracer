@@ -131,6 +131,8 @@ const navigationItems = [
     { label: 'Dashboard', icon: 'i-lucide-home', to: '/' },
     { label: 'Logs', icon: 'i-lucide-audio-lines', to: '/logs' },
     { label: 'Traces', icon: 'i-lucide-audio-waveform', to: '/traces' },
+    { label: 'Events', icon: 'i-lucide-activity', to: '/events' },
+    { label: 'Analytics', icon: 'i-lucide-bar-chart-3', to: '/analytics' },
     { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
 ]
 
